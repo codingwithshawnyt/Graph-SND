@@ -26,15 +26,19 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 
-def _save(fig, path: Path) -> None:
+def _save(fig, path: Path, **tight_layout_kw: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.tight_layout()
+    if tight_layout_kw:
+        fig.tight_layout(**tight_layout_kw)
+    else:
+        fig.tight_layout()
     fig.savefig(path, dpi=200)
     plt.close(fig)
 
@@ -149,7 +153,8 @@ def plot_concentration(df: pd.DataFrame, out_path: Path) -> None:
         )
         ax.legend(loc="upper right", fontsize=9)
 
-    _save(fig, out_path)
+    # Extra horizontal padding between the two iter panels (Figure 3).
+    _save(fig, out_path, w_pad=2.0)
 
 
 def plot_timing(df: pd.DataFrame, out_path: Path) -> None:
