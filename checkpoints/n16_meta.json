@@ -1,0 +1,15 @@
+{
+  "n_agents": 16,
+  "iters": 100,
+  "seed": 0,
+  "scenario": "navigation",
+  "rollout_steps": 128,
+  "num_envs": 32,
+  "obs_dim": 18,
+  "act_dim": 2,
+  "u_range": 1.0,
+  "checkpoints": {
+    "iter_0": "checkpoints/n16_iter0.pt",
+    "iter_100": "checkpoints/n16_iter100.pt"
+  }
+}
