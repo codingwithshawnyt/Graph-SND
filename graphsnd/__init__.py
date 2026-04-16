@@ -9,8 +9,12 @@ from graphsnd.graphs import (
 )
 from graphsnd.metrics import (
     graph_snd,
+    graph_snd_from_rollouts,
+    hoeffding_bound,
     ht_estimator,
     pairwise_behavioral_distance,
+    pairwise_distances_on_edges,
+    serfling_bound,
     snd,
     uniform_sample_estimator,
 )
@@ -25,9 +29,13 @@ __all__ = [
     "bernoulli_edges",
     "complete_edges",
     "graph_snd",
+    "graph_snd_from_rollouts",
+    "hoeffding_bound",
     "ht_estimator",
     "knn_edges",
     "pairwise_behavioral_distance",
+    "pairwise_distances_on_edges",
+    "serfling_bound",
     "snd",
     "uniform_sample_estimator",
     "uniform_size_edges",

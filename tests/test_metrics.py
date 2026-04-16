@@ -30,9 +30,11 @@ from graphsnd.graphs import (
 )
 from graphsnd.metrics import (
     graph_snd,
+    graph_snd_from_rollouts,
     hoeffding_bound,
     ht_estimator,
     pairwise_behavioral_distance,
+    pairwise_distances_on_edges,
     serfling_bound,
     snd,
     uniform_sample_estimator,
@@ -181,6 +183,36 @@ def test_serfling_tighter_than_hoeffding_for_large_m() -> None:
         t_h = hoeffding_bound(d_max, m, delta)
         t_s = serfling_bound(d_max, m, n_pairs, delta)
         assert t_s <= t_h + 1e-12
+
+
+def test_pairwise_distances_on_edges_matches_full_matrix() -> None:
+    means, stds = _synthetic_policies_means_stds(n=7, T=25, d_act=2, seed=11)
+    D = pairwise_behavioral_distance(means, stds)
+    edges = complete_edges(7)
+    d_edges = pairwise_distances_on_edges(means, stds, edges)
+    direct = D[edges[:, 0], edges[:, 1]]
+    assert torch.allclose(d_edges, direct, atol=1e-6)
+
+
+def test_graph_snd_from_rollouts_matches_matrix_path() -> None:
+    means, stds = _synthetic_policies_means_stds(n=5, T=30, d_act=2, seed=3)
+    D = pairwise_behavioral_distance(means, stds)
+    edges = complete_edges(5)
+    assert torch.allclose(
+        graph_snd_from_rollouts(means, stds, edges),
+        graph_snd(D, edges),
+        atol=1e-6,
+    )
+
+    rng = np.random.default_rng(42)
+    edges = bernoulli_edges(5, p=0.6, rng=rng)
+    if edges.shape[0] > 0:
+        weights = torch.ones(edges.shape[0]) / 0.6
+        assert torch.allclose(
+            graph_snd_from_rollouts(means, stds, edges, weights),
+            graph_snd(D, edges, weights),
+            atol=1e-6,
+        )
 
 
 def test_snd_mean_over_upper_triangle_matches_average() -> None:

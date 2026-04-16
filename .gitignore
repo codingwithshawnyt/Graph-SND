@@ -22,9 +22,9 @@ env/
 build/
 dist/
 
-# Experiment outputs (keep directory, ignore contents)
+# Experiment outputs: ignore large binary checkpoints and rendered plots;
+# track CSV/JSON evidence so results are reproducible from the repo.
 checkpoints/*.pt
-results/**/*.csv
 results/**/*.pdf
 results/**/*.png
 results/**/*.npz

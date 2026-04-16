@@ -54,6 +54,83 @@ from graphsnd.graphs import (
 from graphsnd.wasserstein import wasserstein_gaussian_diag
 
 
+def pairwise_distances_on_edges(
+    means: Union[Tensor, Sequence[Tensor]],
+    stds: Union[Tensor, Sequence[Tensor]],
+    edges: Tensor,
+) -> Tensor:
+    """Compute ``d(i, j)`` for only the pairs in ``edges``.
+
+    This is the function that makes Graph-SND genuinely cheaper than
+    full SND: when ``|E| << n*(n-1)/2`` we never materialise the full
+    ``D`` matrix, and we never pay for the Wasserstein evaluations on
+    pairs outside ``E``.
+
+    Parameters
+    ----------
+    means, stds: same conventions as :func:`pairwise_behavioral_distance`.
+    edges: LongTensor of shape ``(|E|, 2)``.
+
+    Returns
+    -------
+    Tensor of shape ``(|E|,)`` with ``result[k] = d(edges[k, 0], edges[k, 1])``.
+    """
+    mu = _stack_if_list(means)
+    sigma = _stack_if_list(stds)
+    if mu.shape != sigma.shape:
+        raise ValueError(
+            f"means and stds must share shape; got {tuple(mu.shape)} vs "
+            f"{tuple(sigma.shape)}"
+        )
+    if mu.ndim != 3:
+        raise ValueError(
+            f"means must have shape (n, T, d_act); got {tuple(mu.shape)}"
+        )
+    if edges.ndim != 2 or edges.shape[-1] != 2:
+        raise ValueError(f"edges must have shape (|E|, 2); got {tuple(edges.shape)}")
+
+    out = torch.zeros(edges.shape[0], dtype=mu.dtype, device=mu.device)
+    for k in range(edges.shape[0]):
+        i = int(edges[k, 0])
+        j = int(edges[k, 1])
+        per_obs_w2 = wasserstein_gaussian_diag(
+            mu[i], sigma[i], mu[j], sigma[j]
+        )
+        out[k] = per_obs_w2.mean()
+    return out
+
+
+def graph_snd_from_rollouts(
+    means: Union[Tensor, Sequence[Tensor]],
+    stds: Union[Tensor, Sequence[Tensor]],
+    edges: Tensor,
+    weights: Optional[Tensor] = None,
+) -> Tensor:
+    """Graph-SND evaluated directly from per-policy ``(means, stds)``.
+
+    Does not materialise ``D``; calls :func:`pairwise_distances_on_edges`
+    on only the edges in ``E`` and then applies the weighted average.
+    Returns ``0`` when ``E`` is empty.
+    """
+    if edges.numel() == 0:
+        mu = _stack_if_list(means)
+        return torch.zeros((), dtype=mu.dtype, device=mu.device)
+    d_vals = pairwise_distances_on_edges(means, stds, edges)
+    if weights is None:
+        return d_vals.mean()
+    if weights.shape != (edges.shape[0],):
+        raise ValueError(
+            f"weights shape {tuple(weights.shape)} does not match |E|={edges.shape[0]}"
+        )
+    if (weights < 0).any():
+        raise ValueError("weights must be non-negative")
+    w = weights.to(d_vals.dtype)
+    denom = w.sum()
+    if denom.item() == 0.0:
+        return torch.zeros_like(d_vals[:1]).squeeze(0)
+    return (w * d_vals).sum() / denom
+
+
 def pairwise_behavioral_distance(
     means: Union[Tensor, Sequence[Tensor]],
     stds: Union[Tensor, Sequence[Tensor]],
