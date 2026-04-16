@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "graphsnd"
+version = "0.1.0"
+description = "Graph-SND: scalable System Neural Diversity via graph-based local aggregation and sampling estimators."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Shawn R." }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "vmas>=1.5.1",
+    "torch>=2.0",
+    "numpy>=1.24,<2.1",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+    "tqdm>=4.65",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.4"]
+
+[tool.setuptools.packages.find]
+include = ["graphsnd*"]
+exclude = ["tests*", "experiments*", "training*", "results*", "checkpoints*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"

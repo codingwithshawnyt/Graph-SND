@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Build / dist
+build/
+dist/
+
+# Experiment outputs (keep directory, ignore contents)
+checkpoints/*.pt
+results/**/*.csv
+results/**/*.pdf
+results/**/*.png
+results/**/*.npz
+!checkpoints/.gitkeep
+!results/.gitkeep
+!results/exp1/.gitkeep
+
+# Logs
+*.log
+wandb/
+
+# Jupyter
+.ipynb_checkpoints/
