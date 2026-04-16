@@ -22,10 +22,9 @@ env/
 build/
 dist/
 
-# Experiment outputs: ignore large binary checkpoints and rendered plots;
-# track CSV/JSON evidence so results are reproducible from the repo.
+# Experiment outputs: ignore heavy binaries, track CSV/JSON/PDF so the
+# paper's numeric evidence and figures can be reproduced from the repo.
 checkpoints/*.pt
-results/**/*.pdf
 results/**/*.png
 results/**/*.npz
 !checkpoints/.gitkeep

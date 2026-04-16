@@ -36,13 +36,16 @@ python training/train_navigation.py --n-agents 4  --iters 100
 python training/train_navigation.py --n-agents 8  --iters 100
 python training/train_navigation.py --n-agents 16 --iters 100
 
-# 2. Run the metric-comparison experiment. Produces CSVs + PDFs
+# 2. Run the metric-comparison experiment. Produces CSVs + summary.json
 #    under results/exp1/.
 python experiments/exp1_metric_comparison.py \
     --checkpoint-dir checkpoints \
     --out results/exp1
 
-# 3. Unit tests (Prop 1, Prop 2, Prop 5, Thm 6, Wasserstein identities)
+# 3. Render the four paper figures from the CSVs.
+python experiments/exp1_plots.py --results results/exp1
+
+# 4. Unit tests (Prop 1, Prop 2, Prop 5, Thm 6, Wasserstein identities).
 pytest tests/ -v
 ```
 
@@ -62,10 +65,22 @@ training/
 
 experiments/
   exp1_metric_comparison.py   Prop 1 @ n=4, Prop 5 @ n=8, Thm 6 @ n=16, timing sweep
+  exp1_plots.py               renders recovery / unbiasedness / concentration / timing PDFs
 
 tests/
   test_wasserstein.py  test_metrics.py  test_graphs.py
 ```
+
+## Experiment 1 headline numbers
+
+From `results/exp1/summary.json` on the committed run (seed 42):
+
+| Claim | What we checked | Observed |
+|-------|-----------------|----------|
+| Prop 1 (K_n recovery) | `|SND - Graph-SND(K_n)|` at n=4 | `0.0` exactly (both iter 0 and iter 100) |
+| Prop 5 (HT unbiased) | `|bias| / SE` of HT mean at n=8, 2000 draws per `p` | max `1.42` across all `p in {0.1, 0.25, 0.5, 0.75}` |
+| Thm 6 (concentration) | empirical `P(|est - SND| >= t_Hoeffding)` at n=16, 2000 draws per `m`, `delta = 0.1` | `0.00` across all m (max 80% of pairs) |
+| Timing | full-SND / sampled-Graph-SND wall-clock ratio | up to `13.4x` at p=0.1; about `1.0x` at p=1.0 |
 
 ## Paper
 
