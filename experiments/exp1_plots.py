@@ -53,7 +53,7 @@ def plot_recovery(df: pd.DataFrame, out_path: Path) -> None:
     b2 = ax_bar.bar(x + width / 2, graph_vals, width, label=r"Graph-SND on $K_n$", color="#ff7f0e")
     ax_bar.set_xticks(x, [t.replace("iter", "iter ") for t in iters])
     ax_bar.set_ylabel("diversity")
-    ax_bar.set_title("Proposition 1: recovery at $n=4$")
+    ax_bar.set_title("Proposition 2: recovery at $n=4$")
     ax_bar.legend(loc="upper left")
     for bars in (b1, b2):
         for bar in bars:
@@ -100,7 +100,7 @@ def plot_unbiasedness(df: pd.DataFrame, out_path: Path) -> None:
         ax.axhline(snd_true, color="#888888", linestyle="--", label=f"SND = {snd_true:.5f}")
         ax.errorbar(
             p, mean, yerr=ci, fmt="o-", color="#2b7aff",
-            capsize=4, label=r"HT mean $\pm\,$95\% CI",
+            capsize=4, label=r"HT mean $\pm$ 95% CI",
         )
         for xi, m, b in zip(p, mean, bias_se):
             ax.annotate(
@@ -112,7 +112,7 @@ def plot_unbiasedness(df: pd.DataFrame, out_path: Path) -> None:
             )
         ax.set_xlabel("inclusion probability $p$")
         ax.set_ylabel(r"$\hat{\mathrm{SND}}_{\mathrm{HT}}$")
-        ax.set_title(f"Prop. 5: HT unbiasedness (n=8, {tag})")
+        ax.set_title(f"Prop. 7: HT unbiasedness (n=8, {tag})")
         ax.legend(loc="best")
 
     _save(fig, out_path)
@@ -145,14 +145,8 @@ def plot_concentration(df: pd.DataFrame, out_path: Path) -> None:
         ax.set_ylabel("concentration radius")
         ax.set_yscale("log")
         ax.set_title(
-            f"Thm. 6 (n=16, {tag}; SND = {snd_true:.4f}, $\\delta$={delta:.2f})"
+            f"Thm. 9 (n=16, {tag}; SND = {snd_true:.4f}, $\\delta$={delta:.2f})"
         )
-        for xi, h, s in zip(m, tail_h, tail_s):
-            ax.annotate(
-                f"H:{h:.2f}/S:{s:.2f}",
-                xy=(xi, 0.9 * min(min(t_h), min(t_s))),
-                ha="center", fontsize=7, color="gray",
-            )
         ax.legend(loc="upper right", fontsize=9)
 
     _save(fig, out_path)
