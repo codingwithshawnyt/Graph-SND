@@ -25,6 +25,9 @@ model:
 
 graph_snd_log_path: ${hydra:runtime.output_dir}/graph_snd_log.csv
 
+experiment:
+  render: false
+
 hydra:
   searchpath:
     - pkg://benchmarl/conf

@@ -24,6 +24,13 @@ model:
 
 graph_snd_log_path: ${hydra:runtime.output_dir}/graph_snd_log.csv
 
+# Headless / cluster-safe: DiCo's navigation render_callback (SND heatmap in
+# het_control/environments/vmas.py) can assert-fail in VMAS for some n_agents
+# during evaluation.render. Training and metrics are unaffected; re-enable
+# with experiment.render=true when debugging visuals locally.
+experiment:
+  render: false
+
 hydra:
   searchpath:
     - pkg://benchmarl/conf

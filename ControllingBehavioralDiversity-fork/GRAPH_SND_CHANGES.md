@@ -25,6 +25,16 @@ control loop. Training, losses, and rollouts are otherwise unchanged.
 | `het_control/conf/model/hetcontrolmlpempirical.yaml` | Defaults `diversity_estimator: full`, `diversity_p: 1.0`, and `desired_snd: 0.5` so Hydra runs do not leave `desired_snd` as null (which breaks `torch.tensor([desired_snd], …)` in `HetControlMlpEmpirical.__init__`). |
 | `het_control/conf/navigation_ippo_config.yaml` | Adds `graph_snd_log_path: null`. |
 
+## Evaluation rendering
+
+The three `navigation_ippo_*_config.yaml` presets set **`experiment.render: false`**
+so runs do not invoke DiCo’s navigation `render_callback` (SND heatmap overlay in
+`het_control/environments/vmas.py`). That callback can trigger
+`assert outputs.shape[0] == pos_shape[0]` inside VMAS for some agent counts during
+RGB evaluation; disabling render avoids the failure on headless servers while
+leaving training and CSV logging unchanged. Override with `experiment.render=true`
+when you need eval videos locally.
+
 ## Not modified
 
 - `het_control/snd.py` (Wasserstein / pairwise distance kernel) — imported, not rewritten.
