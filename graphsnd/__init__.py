@@ -1,6 +1,13 @@
 """Graph-SND: scalable System Neural Diversity via graph-based local
 aggregation and sampling estimators."""
 
+from graphsnd.batched_policies import (
+    BatchedGaussianMLPPolicy,
+    BatchedLinear,
+    BatchedValueMLP,
+    load_batched_checkpoint,
+    save_batched_checkpoint,
+)
 from graphsnd.graphs import (
     bernoulli_edges,
     complete_edges,
@@ -26,6 +33,9 @@ from graphsnd.wasserstein import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "BatchedGaussianMLPPolicy",
+    "BatchedLinear",
+    "BatchedValueMLP",
     "bernoulli_edges",
     "complete_edges",
     "graph_snd",
@@ -33,8 +43,10 @@ __all__ = [
     "hoeffding_bound",
     "ht_estimator",
     "knn_edges",
+    "load_batched_checkpoint",
     "pairwise_behavioral_distance",
     "pairwise_distances_on_edges",
+    "save_batched_checkpoint",
     "serfling_bound",
     "snd",
     "uniform_sample_estimator",

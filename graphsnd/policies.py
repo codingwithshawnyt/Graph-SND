@@ -185,6 +185,10 @@ def load_checkpoint(
 
     Returns ``(policies, values, extra)`` where ``values[i]`` may be
     ``None`` for agents stored without a baseline network.
+
+    Value-network hidden sizes are inferred from the saved state-dict
+    shapes, so this loader works for any ``ValueMLP`` configuration
+    including the non-default sizes used by the scaling experiment.
     """
     path = Path(path)
     payload = torch.load(path, map_location=map_location, weights_only=False)
@@ -195,9 +199,12 @@ def load_checkpoint(
         policy = GaussianMLPPolicy(cfg)
         policy.load_state_dict(entry["policy_state"])
         policies.append(policy)
-        if entry.get("value_state") is not None:
-            vnet = ValueMLP(cfg.obs_dim)
-            vnet.load_state_dict(entry["value_state"])
+        value_state = entry.get("value_state")
+        if value_state is not None:
+            h1 = int(value_state["net.0.weight"].shape[0])
+            h2 = int(value_state["net.2.weight"].shape[0])
+            vnet = ValueMLP(cfg.obs_dim, hidden_sizes=(h1, h2))
+            vnet.load_state_dict(value_state)
             values.append(vnet)
         else:
             values.append(None)
