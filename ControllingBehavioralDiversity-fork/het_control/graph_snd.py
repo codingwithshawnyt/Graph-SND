@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import time
+import weakref
 from typing import Callable, List, Optional, Tuple
 
 import torch
@@ -25,6 +26,51 @@ import torch
 from het_control.snd import compute_behavioral_distance, compute_statistical_distance
 
 logger = logging.getLogger(__name__)
+
+# Per-policy ``torch.Generator`` for Bernoulli edge draws. These must **not** be
+# stored as attributes on ``nn.Module`` because TorchRL's PPO loss deep-copies
+# the actor module, and ``torch.Generator`` is not picklable / deep-copyable.
+_GRAPH_RNGS: "weakref.WeakKeyDictionary[object, torch.Generator]" = weakref.WeakKeyDictionary()
+
+
+def get_graph_rng(owner: object) -> torch.Generator:
+    """Return a CPU ``torch.Generator`` tied to ``owner`` (typically ``self`` of the policy module).
+
+    The generator is kept in a process-global weak-key registry so it is not
+    part of the module's ``__dict__`` and does not break ``deepcopy`` during
+    TorchRL loss construction.
+
+    Parameters
+    ----------
+    owner : object
+        The object that owns this RNG stream (use the ``HetControlMlpEmpirical``
+        instance). Weak references are used so generators are dropped when the
+        module is garbage-collected.
+
+    Returns
+    -------
+    torch.Generator
+        CPU generator; lazily created with ``manual_seed(0)`` on first access.
+    """
+    g = _GRAPH_RNGS.get(owner)
+    if g is None:
+        g = torch.Generator(device="cpu")
+        g.manual_seed(0)
+        _GRAPH_RNGS[owner] = g
+    return g
+
+
+def reseed_graph_rng(owner: object, seed: int) -> None:
+    """Reseed the generator associated with ``owner`` (same scheme as the CSV callback).
+
+    Parameters
+    ----------
+    owner : object
+        Policy module instance (``HetControlMlpEmpirical``).
+    seed : int
+        Integer passed to ``torch.Generator.manual_seed``.
+    """
+    get_graph_rng(owner).manual_seed(int(seed))
 
 
 VALID_ESTIMATORS = ("full", "graph_p01", "graph_p025")

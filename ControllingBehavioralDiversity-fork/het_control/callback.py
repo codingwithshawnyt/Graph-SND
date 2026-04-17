@@ -12,7 +12,7 @@ import torch
 from tensordict import TensorDictBase, TensorDict
 
 from benchmarl.experiment.callback import Callback
-from het_control.graph_snd import drain_iter_times_ms
+from het_control.graph_snd import drain_iter_times_ms, reseed_graph_rng
 from het_control.models.het_control_mlp_empirical import HetControlMlpEmpirical
 from het_control.snd import compute_behavioral_distance
 from het_control.utils import overflowing_logits_norm
@@ -194,8 +194,9 @@ class GraphSNDLoggingCallback(Callback):
     to a user-supplied CSV path. The row is flushed (with ``os.fsync``) so a
     killed run still has partial data on disk.
 
-    The callback also re-seeds each group's ``HetControlMlpEmpirical._graph_rng``
-    at the start of every iteration using ``seed * 10000 + n_iters_performed``,
+    The callback also re-seeds each group's Bernoulli ``torch.Generator`` (via
+    :func:`het_control.graph_snd.reseed_graph_rng`) at the start of every iteration
+    using ``seed * 10000 + n_iters_performed``,
     which guarantees every ``(seed, iter)`` pair reproduces the same sequence
     of Bernoulli edge samples regardless of how many model forward passes the
     PPO loop performs within an iteration.
@@ -287,8 +288,7 @@ class GraphSNDLoggingCallback(Callback):
                 model = get_het_model(policy)
             except Exception:
                 continue
-            if hasattr(model, "_graph_rng"):
-                model._graph_rng.manual_seed(reseed_val)
+            reseed_graph_rng(model, reseed_val)
 
         # Stash reward mean for this iter; written at on_train_end time.
         self._current_reward_mean = self._batch_reward_mean(batch)

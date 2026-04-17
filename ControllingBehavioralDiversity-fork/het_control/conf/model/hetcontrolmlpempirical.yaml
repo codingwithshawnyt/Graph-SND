@@ -7,8 +7,10 @@ num_cells: [256, 256]
 # Activation class between MLP layers. Any torch.nn activation works
 activation_class: torch.nn.Tanh
 
-# The desired SND diversity
-desired_snd: null
+# The desired SND diversity (DiCo target SND_des). Must be a real scalar; upstream
+# examples often override on the CLI (e.g. model.desired_snd=0.1). Default 0.5
+# matches common navigation experiments and the Graph-DiCo smoke configs.
+desired_snd: 0.5
 # The soft-update parameter of the estimated diversity. Must be between 0 and 1
 tau: 0.01
 # Whether on the first iteration the estimated SND should be bootstrapped from the desired snd (True)

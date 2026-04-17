@@ -14,7 +14,7 @@ from torch import nn
 from torchrl.modules import MultiAgentMLP
 
 from benchmarl.models.common import Model, ModelConfig
-from het_control.graph_snd import compute_diversity, time_diversity_call
+from het_control.graph_snd import compute_diversity, get_graph_rng, time_diversity_call
 from het_control.snd import compute_behavioral_distance
 from het_control.utils import overflowing_logits_norm
 from .utils import squash
@@ -68,12 +68,9 @@ class HetControlMlpEmpirical(Model):
         self.process_shared = process_shared
         self.diversity_estimator = diversity_estimator
         self.diversity_p = float(diversity_p)
-        # CPU torch.Generator: the Bernoulli edge draw is tiny even for n=100 and
-        # keeping the generator on CPU avoids a CUDA context hop on cold start.
-        # GraphSNDLoggingCallback.on_batch_collected reseeds this with
-        # ``seed * 10000 + n_iters_performed`` at the start of every PPO iter.
-        self._graph_rng = torch.Generator(device="cpu")
-        self._graph_rng.manual_seed(0)
+        # Bernoulli RNG lives in ``het_control.graph_snd.get_graph_rng(self)`` (weak-key
+        # registry), not on this module, so TorchRL can ``deepcopy`` the actor for
+        # PPO loss. GraphSNDLoggingCallback reseeds via ``reseed_graph_rng`` each iter.
 
         self.register_buffer(
             name="desired_snd",
@@ -266,7 +263,7 @@ class HetControlMlpEmpirical(Model):
             agent_actions,
             estimator=self.diversity_estimator,
             p=self.diversity_p,
-            rng=self._graph_rng,
+            rng=get_graph_rng(self),
             just_mean=True,
         )  # Compute the SND of these unscaled policies (scalar tensor)
         distance = distance_scalar.unsqueeze(-1)
