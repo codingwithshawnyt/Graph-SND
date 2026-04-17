@@ -1,0 +1,30 @@
+# Graph-SND variant: uniform-weight Graph-SND on a Bernoulli(p=0.25) subgraph.
+# Larger p than graph_p01 yields lower variance per iteration at roughly 4x the
+# wall-clock cost. Adds per-iteration CSV logging so this run is directly
+# comparable to the full / graph_p01 variants.
+#
+# Launch:
+#     python het_control/run_scripts/run_navigation_ippo.py \
+#         --config-name navigation_ippo_graph_p025_config
+
+defaults:
+  - experiment: het_control_experiment
+  - algorithm: ippo
+  - task: vmas/navigation
+  - model: hetcontrolmlpempirical
+  - model@critic_model: layers/mlp
+  - _self_
+
+seed: 0
+use_action_loss: True
+action_loss_lr: 0.00003
+
+model:
+  diversity_estimator: graph_p025
+  diversity_p: 0.25
+
+graph_snd_log_path: ${hydra:runtime.output_dir}/graph_snd_log.csv
+
+hydra:
+  searchpath:
+    - pkg://benchmarl/conf

@@ -1,0 +1,29 @@
+# Graph-SND variant: full SND over all C(n, 2) pairs (equivalent to the
+# unmodified DiCo codepath). Adds per-iteration CSV logging so this run is
+# directly comparable to the graph_p01 / graph_p025 variants.
+#
+# Launch:
+#     python het_control/run_scripts/run_navigation_ippo.py \
+#         --config-name navigation_ippo_full_config
+
+defaults:
+  - experiment: het_control_experiment
+  - algorithm: ippo
+  - task: vmas/navigation
+  - model: hetcontrolmlpempirical
+  - model@critic_model: layers/mlp
+  - _self_
+
+seed: 0
+use_action_loss: True
+action_loss_lr: 0.00003
+
+model:
+  diversity_estimator: full
+  diversity_p: 1.0
+
+graph_snd_log_path: ${hydra:runtime.output_dir}/graph_snd_log.csv
+
+hydra:
+  searchpath:
+    - pkg://benchmarl/conf

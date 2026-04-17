@@ -38,5 +38,9 @@ results/**/*.npz
 logs/
 wandb/
 
+# DiCo fork: optional local copy of the Bettini et al. paper PDF (large;
+# clone from arXiv if needed).
+ControllingBehavioralDiversity-fork/*.pdf
+
 # Jupyter
 .ipynb_checkpoints/
