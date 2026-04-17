@@ -72,6 +72,56 @@ pytest tests/ -v
 
 ---
 
+## Scaling experiment: training at $n = 50, 100$
+
+The Experiment-1 pipeline (`training/train_navigation.py`) instantiates one `nn.Linear` per agent per layer, which is fine up to $n = 16$ but becomes Python-loop bound at $n \geq 50$. For the scaling experiment we ship a second trainer, `training/train_navigation_batched.py`, that stacks the $n$ per-agent MLPs into a single `BatchedGaussianMLPPolicy` whose forward pass is one `torch.bmm` call per layer. Parameters remain fully independent across agents, so the gradient for agent $i$ still depends only on agent $i$'s loss (see `tests/test_batched_policies.py::test_gradient_is_independent_across_agents`).
+
+Two additional features matter for long runs:
+
+- **Online Graph-SND cost logging.** At every `--snd-every` iterations the trainer measures both full SND and Graph-SND on the current rollout and appends the values *and wall-clock costs* to `results/scaling/n{n}_{tag}_snd_log.csv`. At $n = 100$ that is $\binom{100}{2} = 4{,}950$ Wasserstein evaluations for full SND versus roughly $500$ at $p = 0.1$, so the operational speedup from Prop. 6 becomes visible during training, not just at the end.
+- **Periodic checkpointing and resume.** Checkpoints are written every `--ckpt-every` iterations, the latest is duplicated to `checkpoints/n{n}_{tag}_latest.pt`, and `--resume` restores policy, value net, optimizer, and RNGs so an overnight run can survive a crash or reboot.
+
+### Run overnight on 2 GPUs
+
+Preflight first — this runs the test suite, probes every visible CUDA device, and completes a 2-iteration smoke training on each one. It exits in under two minutes if anything is wrong with the setup:
+
+```bash
+bash scripts/preflight.sh
+```
+
+Then launch the overnight run. The scripts detach via `nohup`, stream logs to `logs/`, and write the pid to `logs/n{n}_{tag}.pid` so you can close the terminal:
+
+```bash
+bash scripts/run_overnight_n100.sh                    # cuda:0, n=100, 5000 iters
+DEVICE=cuda:1 bash scripts/run_overnight_n50.sh       # cuda:1, n=50, 5000 iters
+```
+
+Override any parameter via environment variables, e.g. `ITERS=10000 bash scripts/run_overnight_n100.sh`. To resume, pass `RESUME=checkpoints/n100_overnight_latest.pt`. During the run, follow progress with `tail -f logs/n100_overnight_*.log`; the SND / speedup line is printed every `SND_EVERY` iterations (default 50):
+
+```
+[SND] full=0.1542 (4950 pairs, 412.7ms)  Graph-SND(p=0.10)=0.1535 (498 pairs, 42.1ms)  speedup=9.80x
+```
+
+### Loading a scaling checkpoint
+
+Every training checkpoint ships with a sidecar `.metric.pt` written in the per-agent format, so the existing Experiment-1 evaluator consumes it without changes:
+
+```python
+from graphsnd.batched_policies import load_batched_checkpoint
+from graphsnd.policies import load_checkpoint
+
+batched_policy, batched_value, _ = load_batched_checkpoint(
+    "checkpoints/n100_overnight_iter5000.metric.pt"
+)
+per_agent_policies, per_agent_values, _ = load_checkpoint(
+    "checkpoints/n100_overnight_iter5000.metric.pt"
+)
+```
+
+Both calls return objects that produce bit-identical forward outputs (this is asserted in the batched-policy test file).
+
+---
+
 ## Experiment 1: headline results
 
 The following table summarizes the automated validation of the paper’s theoretical claims (values from `results/exp1/summary.json` on the committed seed-42 run):
@@ -89,21 +139,28 @@ The following table summarizes the automated validation of the paper’s theoret
 
 ```text
 .
-├── graphsnd/                 # core package
-│   ├── wasserstein.py        # closed-form W₂ between Gaussians (diag & full cov)
-│   ├── metrics.py            # SND, Graph-SND, HT estimator, uniform estimator
-│   ├── graphs.py             # complete, Bernoulli, uniform-size, and k-NN graph generators
-│   ├── policies.py           # GaussianMLPPolicy (independent per-agent, no parameter sharing)
-│   └── rollouts.py           # evaluation rollout collection
+├── graphsnd/                     # core package
+│   ├── wasserstein.py            # closed-form W₂ between Gaussians (diag & full cov)
+│   ├── metrics.py                # SND, Graph-SND, HT estimator, uniform estimator
+│   ├── graphs.py                 # complete, Bernoulli, uniform-size, and k-NN graph generators
+│   ├── policies.py               # GaussianMLPPolicy (independent per-agent, no parameter sharing)
+│   ├── batched_policies.py       # BatchedGaussianMLPPolicy for scalable training (n >= 50)
+│   └── rollouts.py               # evaluation rollout collection
 ├── training/
-│   └── train_navigation.py   # minimal IPPO training loop for VMAS navigation
+│   ├── train_navigation.py       # minimal IPPO for Exp. 1 (n in {4, 8, 16})
+│   └── train_navigation_batched.py  # scalable batched IPPO for the scaling experiment
 ├── experiments/
-│   ├── exp1_metric_comparison.py  # validation data for Props. 2, 6, 7 and Thm. 9
-│   └── exp1_plots.py         # Matplotlib rendering for the four paper PDFs
+│   ├── exp1_metric_comparison.py # validation data for Props. 2, 6, 7 and Thm. 9
+│   └── exp1_plots.py             # Matplotlib rendering for the four paper PDFs
+├── scripts/
+│   ├── preflight.sh              # preflight check before overnight runs
+│   ├── run_overnight_n100.sh     # detach overnight n=100 training on cuda:0
+│   └── run_overnight_n50.sh      # detach overnight n=50 training on cuda:1
 └── tests/
-    ├── test_wasserstein.py   # distance identities
-    ├── test_metrics.py       # metric properties and bounds
-    └── test_graphs.py        # graph generators
+    ├── test_wasserstein.py       # distance identities
+    ├── test_metrics.py           # metric properties and bounds
+    ├── test_graphs.py            # graph generators
+    └── test_batched_policies.py  # batched ↔ per-agent equivalence
 ```
 
 ## Citation and reference

@@ -25,14 +25,17 @@ dist/
 # Experiment outputs: ignore heavy binaries, track CSV/JSON/PDF so the
 # paper's numeric evidence and figures can be reproduced from the repo.
 checkpoints/*.pt
+checkpoints/*.metric.pt
 results/**/*.png
 results/**/*.npz
 !checkpoints/.gitkeep
 !results/.gitkeep
 !results/exp1/.gitkeep
+!results/scaling/.gitkeep
 
-# Logs
+# Logs and overnight-run artifacts
 *.log
+logs/
 wandb/
 
 # Jupyter
