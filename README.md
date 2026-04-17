@@ -169,11 +169,15 @@ The following table summarizes the automated validation of the paper’s theoret
 ## Third-party code
 
 This repository vendors a fork of [DiCo](https://github.com/proroklab/ControllingBehavioralDiversity)
-(Bettini et al., ICML 2024) at `ControllingBehavioralDiversity-fork/` for the Graph-DiCo integration
-experiment (Section 6.7 of the paper). The fork is used under DiCo's original license
-(see `ControllingBehavioralDiversity-fork/LICENSE`). Modifications to enable Graph-SND as a
-diversity control target are documented in `ControllingBehavioralDiversity-fork/GRAPH_SND_CHANGES.md`.
+at `ControllingBehavioralDiversity-fork/` for the Graph-DiCo integration experiment (Section 6.7 of the
+paper). **If you use this code in research, cite DiCo** as requested upstream: Bettini, M.,
+Kortvelesy, R., & Prorok, A. (2024). *Controlling Behavioral Diversity in Multi-Agent Reinforcement
+Learning* [Conference paper]. Forty-first International Conference on Machine Learning. For BibTeX
+and machine-readable metadata, use `ControllingBehavioralDiversity-fork/CITATION.cff` (the
+`preferred-citation` block matches the sentence above). The fork is used under DiCo's original terms
+(see `ControllingBehavioralDiversity-fork/LICENSE`). Modifications to enable Graph-SND as a diversity
+control target are documented in `ControllingBehavioralDiversity-fork/GRAPH_SND_CHANGES.md`.
 
 ## Citation and reference
 
-Please refer to the companion paper for the formal definitions, proofs, and discussion of Graph-SND’s graph-based aggregation and sampling semantics.
+Please refer to the companion paper for the formal definitions, proofs, and discussion of Graph-SND's graph-based aggregation and sampling semantics.
