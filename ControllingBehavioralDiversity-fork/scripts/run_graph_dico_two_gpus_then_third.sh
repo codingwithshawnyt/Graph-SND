@@ -39,8 +39,12 @@ HYDRA_OVERRIDES=(
   "model.desired_snd=${DESIRED_SND}"
 )
 
-echo "[$(date -Is)] Starting full SND on cuda:0 -> logs/dico_full_n${N_AGENTS}.log"
-nohup "${RUNNER[@]}" \
+# Pin one physical GPU per process via CUDA_VISIBLE_DEVICES and always pass
+# train/sampling_device=cuda:0 (each process only sees one logical GPU). This
+# avoids Hydra/argparse edge cases with dynamic cuda:N overrides on the third
+# job and matches common cluster practice.
+echo "[$(date -Is)] Starting full SND on physical GPU 0 -> logs/dico_full_n${N_AGENTS}.log"
+CUDA_VISIBLE_DEVICES=0 nohup "${RUNNER[@]}" \
   --config-name navigation_ippo_full_config \
   "${HYDRA_OVERRIDES[@]}" \
   experiment.train_device=cuda:0 \
@@ -48,12 +52,12 @@ nohup "${RUNNER[@]}" \
   > "logs/dico_full_n${N_AGENTS}.log" 2>&1 &
 P0=$!
 
-echo "[$(date -Is)] Starting graph p=0.25 on cuda:1 -> logs/dico_graph_p025_n${N_AGENTS}.log"
-nohup "${RUNNER[@]}" \
+echo "[$(date -Is)] Starting graph p=0.25 on physical GPU 1 -> logs/dico_graph_p025_n${N_AGENTS}.log"
+CUDA_VISIBLE_DEVICES=1 nohup "${RUNNER[@]}" \
   --config-name navigation_ippo_graph_p025_config \
   "${HYDRA_OVERRIDES[@]}" \
-  experiment.train_device=cuda:1 \
-  experiment.sampling_device=cuda:1 \
+  experiment.train_device=cuda:0 \
+  experiment.sampling_device=cuda:0 \
   > "logs/dico_graph_p025_n${N_AGENTS}.log" 2>&1 &
 P1=$!
 
@@ -77,25 +81,25 @@ done
 
 # Whichever job exited first frees its GPU; start the third job there.
 if kill -0 "$P0" 2>/dev/null; then
-  # P0 still running => P1 (cuda:1) finished first => cuda:1 is free.
-  FREE=cuda:1
-  echo "[$(date -Is)] First finish: cuda:1 job (PID $P1) exited -> starting third on cuda:1"
+  # P0 still running => P1 (physical GPU 1) finished first.
+  FREE_DEV=1
+  echo "[$(date -Is)] First finish: GPU-1 job (PID $P1) exited -> starting third on physical GPU 1"
 elif kill -0 "$P1" 2>/dev/null; then
-  # P1 still running => P0 (cuda:0) finished first => cuda:0 is free.
-  FREE=cuda:0
-  echo "[$(date -Is)] First finish: cuda:0 job (PID $P0) exited -> starting third on cuda:0"
+  # P1 still running => P0 (physical GPU 0) finished first.
+  FREE_DEV=0
+  echo "[$(date -Is)] First finish: GPU-0 job (PID $P0) exited -> starting third on physical GPU 0"
 else
-  # Both ended in the same window (rare): pick cuda:0 and let the user inspect logs.
-  FREE=cuda:0
-  echo "[$(date -Is)] Both initial jobs already exited; starting third on cuda:0 (check logs)"
+  # Both ended in the same window (rare): pick GPU 0 and let the user inspect logs.
+  FREE_DEV=0
+  echo "[$(date -Is)] Both initial jobs already exited; starting third on physical GPU 0 (check logs)"
 fi
 
-echo "[$(date -Is)] Starting graph p=0.1 on ${FREE} -> logs/dico_graph_p01_n${N_AGENTS}.log"
-nohup "${RUNNER[@]}" \
+echo "[$(date -Is)] Starting graph p=0.1 on physical GPU ${FREE_DEV} -> logs/dico_graph_p01_n${N_AGENTS}.log"
+CUDA_VISIBLE_DEVICES="${FREE_DEV}" nohup "${RUNNER[@]}" \
   --config-name navigation_ippo_graph_p01_config \
   "${HYDRA_OVERRIDES[@]}" \
-  "experiment.train_device=${FREE}" \
-  "experiment.sampling_device=${FREE}" \
+  experiment.train_device=cuda:0 \
+  experiment.sampling_device=cuda:0 \
   > "logs/dico_graph_p01_n${N_AGENTS}.log" 2>&1 &
 P2=$!
 
