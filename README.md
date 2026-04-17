@@ -156,12 +156,23 @@ The following table summarizes the automated validation of the paper’s theoret
 │   ├── preflight.sh              # preflight check before overnight runs
 │   ├── run_overnight_n100.sh     # detach overnight n=100 training on cuda:0
 │   └── run_overnight_n50.sh      # detach overnight n=50 training on cuda:1
+├── ControllingBehavioralDiversity-fork/  # vendored DiCo + Graph-SND integration (Section 6.7)
+│   ├── GRAPH_SND_CHANGES.md      # list of modifications vs upstream DiCo
+│   └── LICENSE                   # DiCo / ProrokLab terms (see Third-party code)
 └── tests/
     ├── test_wasserstein.py       # distance identities
     ├── test_metrics.py           # metric properties and bounds
     ├── test_graphs.py            # graph generators
     └── test_batched_policies.py  # batched ↔ per-agent equivalence
 ```
+
+## Third-party code
+
+This repository vendors a fork of [DiCo](https://github.com/proroklab/ControllingBehavioralDiversity)
+(Bettini et al., ICML 2024) at `ControllingBehavioralDiversity-fork/` for the Graph-DiCo integration
+experiment (Section 6.7 of the paper). The fork is used under DiCo's original license
+(see `ControllingBehavioralDiversity-fork/LICENSE`). Modifications to enable Graph-SND as a
+diversity control target are documented in `ControllingBehavioralDiversity-fork/GRAPH_SND_CHANGES.md`.
 
 ## Citation and reference
 

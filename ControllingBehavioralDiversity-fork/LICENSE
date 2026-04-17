@@ -1,0 +1,10 @@
+Copyright (c) 2024 ProrokLab (https://www.proroklab.org/). All rights reserved.
+
+This directory contains code derived from the ControllingBehavioralDiversity
+repository (https://github.com/proroklab/ControllingBehavioralDiversity),
+accompanying Bettini et al., "Controlling Behavioral Diversity in Multi-Agent
+Reinforcement Learning", ICML 2024. Individual source files retain the same
+copyright and "All rights reserved" notice as in the upstream project.
+
+For a concise list of changes made in this fork for Graph-SND integration, see
+GRAPH_SND_CHANGES.md in this directory.
