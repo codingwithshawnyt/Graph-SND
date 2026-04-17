@@ -30,8 +30,9 @@ MAX_ITERS="${MAX_ITERS:-300}"
 DESIRED_SND="${DESIRED_SND:-0.5}"
 LOGGERS='experiment.loggers=[]'
 
-COMMON=(
-  het_control/run_scripts/run_navigation_ippo.py
+# Hydra: put --config-name before overrides (matches a known-good manual CLI).
+RUNNER=(python het_control/run_scripts/run_navigation_ippo.py)
+HYDRA_OVERRIDES=(
   "${LOGGERS}"
   "task.n_agents=${N_AGENTS}"
   "experiment.max_n_iters=${MAX_ITERS}"
@@ -39,20 +40,35 @@ COMMON=(
 )
 
 echo "[$(date -Is)] Starting full SND on cuda:0 -> logs/dico_full_n${N_AGENTS}.log"
-nohup python "${COMMON[@]}" \
+nohup "${RUNNER[@]}" \
   --config-name navigation_ippo_full_config \
+  "${HYDRA_OVERRIDES[@]}" \
   experiment.train_device=cuda:0 \
   experiment.sampling_device=cuda:0 \
   > "logs/dico_full_n${N_AGENTS}.log" 2>&1 &
 P0=$!
 
 echo "[$(date -Is)] Starting graph p=0.25 on cuda:1 -> logs/dico_graph_p025_n${N_AGENTS}.log"
-nohup python "${COMMON[@]}" \
+nohup "${RUNNER[@]}" \
   --config-name navigation_ippo_graph_p025_config \
+  "${HYDRA_OVERRIDES[@]}" \
   experiment.train_device=cuda:1 \
   experiment.sampling_device=cuda:1 \
   > "logs/dico_graph_p025_n${N_AGENTS}.log" 2>&1 &
 P1=$!
+
+echo "[$(date -Is)] Spawned P0=$P0 P1=$P1; waiting a few seconds to confirm they stay up..."
+sleep 5
+if ! kill -0 "$P0" 2>/dev/null; then
+  echo "[$(date -Is)] ERROR: full-SND job (P0) exited immediately. Tail logs/dico_full_n${N_AGENTS}.log:" >&2
+  tail -n 80 "logs/dico_full_n${N_AGENTS}.log" >&2 || true
+  exit 1
+fi
+if ! kill -0 "$P1" 2>/dev/null; then
+  echo "[$(date -Is)] ERROR: graph-p025 job (P1) exited immediately. Tail logs/dico_graph_p025_n${N_AGENTS}.log:" >&2
+  tail -n 80 "logs/dico_graph_p025_n${N_AGENTS}.log" >&2 || true
+  exit 1
+fi
 
 echo "[$(date -Is)] Waiting until one of PIDs {$P0,$P1} finishes..."
 while kill -0 "$P0" 2>/dev/null && kill -0 "$P1" 2>/dev/null; do
@@ -75,8 +91,9 @@ else
 fi
 
 echo "[$(date -Is)] Starting graph p=0.1 on ${FREE} -> logs/dico_graph_p01_n${N_AGENTS}.log"
-nohup python "${COMMON[@]}" \
+nohup "${RUNNER[@]}" \
   --config-name navigation_ippo_graph_p01_config \
+  "${HYDRA_OVERRIDES[@]}" \
   "experiment.train_device=${FREE}" \
   "experiment.sampling_device=${FREE}" \
   > "logs/dico_graph_p01_n${N_AGENTS}.log" 2>&1 &
