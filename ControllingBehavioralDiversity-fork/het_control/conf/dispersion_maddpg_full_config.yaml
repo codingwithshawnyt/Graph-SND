@@ -1,0 +1,53 @@
+# DiCo-validated sanity baseline for the fork.
+#
+# This config is the MADDPG + Dispersion analogue of
+# navigation_ippo_full_config.yaml: it adds per-iteration Graph-SND CSV
+# logging and forces the "full SND" estimator (the codepath that is
+# bit-identical to upstream DiCo) on top of the DiCo paper's validated
+# n=4 share_rew=True Dispersion task. The point is to answer a single
+# binary question:
+#
+#     Can this fork learn *anything* at n=4 on a DiCo-paper-validated
+#     task, or is the whole fork broken?
+#
+# If reward grows and applied_snd tracks desired_snd on Dispersion n=4,
+# the n=4-Navigation divergence documented in DIAGNOSIS.md is a
+# task-extrapolation issue (DiCo+Graph-SND-as-control on n=4 individual-
+# goal Navigation is novel to this project and not validated by either
+# paper). If reward stays near zero even on Dispersion n=4 share_rew=True,
+# the fork itself has a broader regression versus upstream DiCo and the
+# next plan is a dependency-and-config diff.
+#
+# Launch:
+#     python het_control/run_scripts/run_dispersion_maddpg_full.py \
+#         --config-name dispersion_maddpg_full_config
+#
+# See DIAGNOSIS.md "Postmortem #2" for the full reasoning.
+
+defaults:
+  - experiment: het_control_experiment
+  - algorithm: maddpg
+  - task: vmas/dispersion
+  - model: hetcontrolmlpempirical
+  - model@critic_model: layers/mlp
+  - _self_
+
+seed: 0
+use_action_loss: True
+action_loss_lr: 0.00003
+
+model:
+  diversity_estimator: full
+  diversity_p: 1.0
+
+graph_snd_log_path: ${hydra:runtime.output_dir}/graph_snd_log.csv
+
+# Headless / cluster-safe: mirror navigation_ippo_full_config.yaml. The
+# Dispersion render path also invokes VMAS heatmap callbacks that can
+# crash at eval time; training metrics are unaffected.
+experiment:
+  render: false
+
+hydra:
+  searchpath:
+    - pkg://benchmarl/conf

@@ -378,3 +378,147 @@ zero would indicate a gradient-flow bug, not a hyperparameter problem.
 - **iter 167 (full run)**: `reward_mean` plateaus near 0.3-0.5 per step,
   and `snd_t` fluctuates within [0.03, 0.3]. All three estimator variants
   should track within a few percent.
+
+## Postmortem #2: three speculative fixes, no actual fix
+
+The `desired_snd = 0.1` "fix" above is **retracted**. The text from the
+first postmortem through `Updated expected trajectory (at desired_snd
+= 0.1)` is preserved verbatim as the record of a second
+wrong-but-internally-consistent attempt; treat every "expected
+trajectory" bullet there as falsified.
+
+### What the 20-iter smoke actually produced at `desired_snd=0.1`
+
+Running the rewritten `tests/smoke_dico_training.py` against
+`navigation_ippo_full_config` at `n=4`, `desired_snd=0.1`,
+`bootstrap_from_desired_snd=False`:
+
+| iter | `snd_t` | `reward_mean` |
+|-----:|--------:|--------------:|
+|    0 | 0.2606  | -0.0014       |
+|    5 | 0.2820  |  0.0042       |
+|   10 | 0.3322  |  0.0048       |
+|   15 | 0.4378  |  0.0049       |
+|   19 | 0.5427  |  0.0047       |
+
+Direction check failed (`snd_t` moves away from `snd_des` between iter 0
+and 5), runaway check failed
+(`max(snd_t[15:20]) / mean(snd_t[5:10]) = 0.543 / 0.298 = 1.82 > 1.5`),
+and the final-iter magnitude check failed
+(`snd_t[-1] = 0.543` vs allowed window `[0.03, 0.30]`). The
+reward-learning-signal check passed by 0.003 — barely, and not in a
+shape that looks like actual learning. **The shape of the failure is
+identical to the `desired_snd=0.5` runs**: monotone ~4%/iter growth of
+raw `snd_t`, reward glued near zero. Lowering `desired_snd` from 0.5 to
+0.1 only moved the absolute scale; it did not change the qualitative
+dynamics.
+
+### Why Postmortem #1's reasoning about iter 0 was still wrong
+
+Postmortem #1 predicted `snd_t[0] ≈ 0.03-0.06` under
+`bootstrap_from_desired_snd=False` because the soft-update should have
+converged to the raw measurement within one real-run iteration. The
+actual smoke value is 0.26 — about 5× what was predicted, and also
+inconsistent with "soft-update converged to raw". The math behind the
+actual observation:
+
+- Smoke config runs ~15 forwards per iter (`n_minibatch_iters=5`,
+  `minibatch_size=2048`, `collected_frames_per_batch=6000`).
+- `0.99^15 ≈ 0.86`, so at iter 0's end the soft-update equals
+  `0.86 × initial_seed + 0.14 × raw_measurement`.
+- `0.86 × initial_seed + 0.14 × raw ≈ 0.26`, which solved for
+  `initial_seed ≈ 0.30` if raw is much smaller.
+
+So `estimated_snd` is effectively seeded with ~0.3 at construction time
+(not zero, not `desired_snd`), and the smoke regime never equilibrates
+away from that seed. The real-run regime (~675 forwards/iter, so
+`0.99^675 ≈ 1.1e-3`) does equilibrate — but then we're in a completely
+different dynamical system than the smoke is simulating. The smoke test
+was therefore diagnosing a different process than the one real runs
+execute; passing or failing there carries very little information about
+real-run behavior. This is why three successive "postmortem fixes"
+based on smoke-test readouts have all been wrong.
+
+### The actual source is that this experiment is research extrapolation
+
+User clarification: the Graph-SND paper does **not** include a
+"Section 6.7 Graph-DiCo integration" experiment. Section 6.7 of that
+paper is a future-work section that explicitly leaves testing
+Graph-SND on DiCo-controlled training to later work.
+
+- The **DiCo** paper validates Navigation at `n_agents=2` only. Every
+  DiCo-paper n=4 experiment uses a different task (Dispersion with
+  `share_rew=True`, Sampling, Reverse Transport).
+  See [het_control/conf/task/vmas/navigation.yaml](het_control/conf/task/vmas/navigation.yaml)
+  line 6 and the DiCo README's Navigation examples, which all use n=2.
+- The **Graph-SND** paper uses Navigation at `n=4`/`8`/`16` with its
+  **own** IPPO trainer and only *measures* SND per-checkpoint; it never
+  routes Graph-SND through DiCo's `desired_snd / estimated_snd`
+  scaling feedback loop.
+- Our `navigation_ippo_*_config.yaml` variants run **DiCo's control
+  loop** at n=4 individual-goal Navigation with Graph-SND as the
+  diversity signal. That combination — DiCo-control + Graph-SND-signal
+  + n=4 + individual goals + Navigation — is validated by neither
+  paper.
+
+The fork's `estimator="full"` codepath is bit-identical to upstream
+DiCo at `het_control/models/het_control_mlp_empirical.py`. The
+commented-out `# @torch.no_grad()` on `estimate_snd` that was suspected
+earlier as a fork bug is present identically upstream — red herring.
+So "the fork broke DiCo" is not a tenable hypothesis without new
+evidence.
+
+### Two forward paths
+
+1. **Task-extrapolated** (most likely, given the DiCo paper's n=2 cap
+   on Navigation): the fork is fine; n=4 individual-goal Navigation
+   with DiCo control is simply not trainable at these hyperparameters.
+   The correct research move is to redesign the Graph-SND-as-control
+   experiment around a DiCo-validated task (Dispersion n=4
+   `share_rew=True`) or restrict Graph-SND-as-control to n=2
+   Navigation.
+2. **Fork-broken**: a subtler regression somewhere in the fork's
+   dependency stack (BenchMARL / TorchRL / VMAS pinning), config
+   defaults, or custom integration code causes divergence on any task
+   at n>2. Less likely (the `estimator="full"` code matches upstream
+   line-for-line) but must be ruled out.
+
+### What this plan does instead of another speculative fix
+
+No more hyperparameter edits are promised. Three changes give us the
+evidence to pick between the two branches above:
+
+1. **CSV instrumentation**
+   ([het_control/callback.py](het_control/callback.py))
+   adds `scaling_ratio_mean`, `applied_snd`, and `out_loc_norm_mean`
+   columns so the CSV shows the quantity DiCo is actually controlling
+   (applied SND) rather than only raw per-agent spread (`snd_t`). The
+   `snd_t=165` plateau from the first n=16 runs does not by itself
+   prove DiCo failed — `applied_snd` does.
+2. **DiCo-validated sanity baseline**: new
+   [het_control/conf/dispersion_maddpg_full_config.yaml](het_control/conf/dispersion_maddpg_full_config.yaml),
+   [het_control/run_scripts/run_dispersion_maddpg_full.py](het_control/run_scripts/run_dispersion_maddpg_full.py),
+   and
+   [scripts/run_dispersion_sanity.sh](scripts/run_dispersion_sanity.sh)
+   run a single 30-iter Dispersion n=4 `share_rew=True` MADDPG job.
+   Reward should climb within ~30 iters if the fork is healthy.
+3. **Smoke-test simplified to crash-only**: the current smoke misled
+   three diagnoses in a row because its dynamical regime does not
+   match real runs. It is now reduced to "process exits 0, CSV has ≥ 5
+   rows, no NaN in the numeric columns" and nothing more. See
+   [tests/smoke_dico_training.py](tests/smoke_dico_training.py).
+
+### Decision rule after the sanity baseline
+
+- Dispersion sanity shows reward growth + `applied_snd` tracking
+  `desired_snd` ⇒ **task-extrapolated** branch. Next plan:
+  redesign the Graph-SND-as-control experiment around
+  Dispersion n=4 `share_rew=True`, or scope Navigation runs to
+  n=2 with DiCo's paper hyperparameters.
+- Dispersion sanity shows reward stuck near zero on Dispersion too
+  ⇒ **fork-broken** branch. Next plan: dependency / config / code
+  diff against upstream DiCo, verify n=2 Navigation matches paper
+  reward, then revisit.
+
+Either branch is much cheaper to execute than another round of
+hyperparameter speculation.

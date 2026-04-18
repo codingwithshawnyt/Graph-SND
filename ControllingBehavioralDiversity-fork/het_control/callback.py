@@ -4,6 +4,7 @@
 
 import csv
 import logging
+import math
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -190,7 +191,8 @@ class GraphSNDLoggingCallback(Callback):
     """Per-iteration CSV logger for Graph-SND DiCo runs.
 
     Writes one row per PPO iteration with columns
-    ``iter, seed, n_agents, estimator, p, snd_t, snd_des, reward_mean, metric_time_ms``
+    ``iter, seed, n_agents, estimator, p, snd_t, snd_des, reward_mean,
+    metric_time_ms, scaling_ratio_mean, applied_snd, out_loc_norm_mean``
     to a user-supplied CSV path. The row is flushed (with ``os.fsync``) so a
     killed run still has partial data on disk.
 
@@ -200,6 +202,30 @@ class GraphSNDLoggingCallback(Callback):
     which guarantees every ``(seed, iter)`` pair reproduces the same sequence
     of Bernoulli edge samples regardless of how many model forward passes the
     PPO loop performs within an iteration.
+
+    Notes on the three diagnostic columns (added 2026-04 after three
+    speculative hyperparameter fixes failed; see DIAGNOSIS.md Postmortem #2):
+
+    - ``scaling_ratio_mean`` is the batch mean of the scaling ratio that
+      ``HetControlMlpEmpirical._forward`` writes into the tensordict under
+      ``(group, "scaling_ratio")``. With DiCo's invariant
+      ``applied_SND = scaling_ratio * raw_SND`` and ``scaling_ratio =
+      desired_snd / estimated_snd``, a healthy run has
+      ``scaling_ratio_mean`` close to ``snd_des / snd_t`` per row.
+    - ``applied_snd`` is ``snd_t * scaling_ratio_mean``, i.e. the
+      diversity of the per-agent actions *the environment actually sees*.
+      This is the quantity DiCo is trying to keep at ``desired_snd``.
+      ``snd_t`` alone can run away (raw per-agent network spread) while
+      applied SND stays on target -- only ``applied_snd`` tells us
+      whether the control loop itself is working.
+    - ``out_loc_norm_mean`` is the batch mean of ``(group, "out_loc_norm")``,
+      which ``HetControlMlpEmpirical`` already computes for the action-space
+      overflow loss. It surfaces when agent means saturate the action
+      bounds (a frequent root cause of reward stagnation).
+
+    All three are best-effort: if BenchMARL's training_td does not carry
+    the key for a given algorithm, the column is written as ``nan`` and
+    downstream consumers should treat it accordingly.
     """
 
     CSV_FIELDS: List[str] = [
@@ -212,6 +238,9 @@ class GraphSNDLoggingCallback(Callback):
         "snd_des",
         "reward_mean",
         "metric_time_ms",
+        "scaling_ratio_mean",
+        "applied_snd",
+        "out_loc_norm_mean",
     ]
 
     def __init__(
@@ -320,6 +349,17 @@ class GraphSNDLoggingCallback(Callback):
             float(sum(times) / len(times)) if times else float("nan")
         )
 
+        scaling_ratio_mean = _batch_tensor_mean(
+            training_td, (group, "scaling_ratio")
+        )
+        out_loc_norm_mean = _batch_tensor_mean(
+            training_td, (group, "out_loc_norm")
+        )
+        if math.isfinite(snd_t) and math.isfinite(scaling_ratio_mean):
+            applied_snd = snd_t * scaling_ratio_mean
+        else:
+            applied_snd = float("nan")
+
         row: Dict[str, Any] = {
             "iter": self._current_iter,
             "seed": self.seed,
@@ -330,6 +370,9 @@ class GraphSNDLoggingCallback(Callback):
             "snd_des": snd_des,
             "reward_mean": self._current_reward_mean,
             "metric_time_ms": metric_time_ms,
+            "scaling_ratio_mean": scaling_ratio_mean,
+            "applied_snd": applied_snd,
+            "out_loc_norm_mean": out_loc_norm_mean,
         }
         assert self._csv_writer is not None
         self._csv_writer.writerow(row)
@@ -377,3 +420,23 @@ def _safe_tensordict_get(td: TensorDictBase, key) -> Optional[torch.Tensor]:
         return td.get(key)
     except (KeyError, Exception):
         return None
+
+
+def _batch_tensor_mean(td: TensorDictBase, key) -> float:
+    """Return ``td.get(key).float().mean().item()`` if present and finite, else NaN.
+
+    Used by :class:`GraphSNDLoggingCallback` to surface diagnostic quantities
+    (``scaling_ratio``, ``out_loc_norm``) that :class:`HetControlMlpEmpirical`
+    writes into the per-forward tensordict. Depending on the algorithm and
+    BenchMARL version, these keys may or may not survive into the training_td
+    seen by ``on_train_end``; we return NaN defensively so the row is still
+    written rather than the whole iteration being lost.
+    """
+    value = _safe_tensordict_get(td, key)
+    if value is None:
+        return float("nan")
+    try:
+        mean = float(value.float().mean().item())
+    except Exception:
+        return float("nan")
+    return mean if math.isfinite(mean) else float("nan")
