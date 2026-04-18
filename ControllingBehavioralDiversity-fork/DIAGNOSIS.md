@@ -500,8 +500,14 @@ evidence to pick between the two branches above:
    [het_control/run_scripts/run_dispersion_maddpg_full.py](het_control/run_scripts/run_dispersion_maddpg_full.py),
    and
    [scripts/run_dispersion_sanity.sh](scripts/run_dispersion_sanity.sh)
-   run a single 30-iter Dispersion n=4 `share_rew=True` MADDPG job.
-   Reward should climb within ~30 iters if the fork is healthy.
+   runs a Dispersion n=4 `share_rew=True` MADDPG job (default
+   `MAX_ITERS=200`; use `MAX_ITERS=30` only for a quick smoke). MADDPG is
+   off-policy: early iters have sparse replay and high exploration
+   epsilon, so reward can look flat for dozens of iters unless you
+   shorten `experiment.exploration_anneal_frames` or raise
+   `experiment.off_policy_init_random_frames` via `HYDRA_EXTRA` (see
+   script header). Reward should climb over a long enough horizon if the
+   fork is healthy.
 3. **Smoke-test simplified to crash-only**: the current smoke misled
    three diagnoses in a row because its dynamical regime does not
    match real runs. It is now reduced to "process exits 0, CSV has ≥ 5
