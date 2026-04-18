@@ -13,6 +13,16 @@
 #
 # Override defaults with env vars, e.g.:
 #   N_AGENTS=100 MAX_ITERS=500 DESIRED_SND=0.5 bash scripts/run_graph_dico_two_gpus_then_third.sh
+#
+# Why N_AGENTS default is 4 (and NOT 16): Bettini et al. 2024 (ICML) validated
+# DiCo-Navigation at n=2 (see het_control/conf/task/vmas/navigation.yaml). With
+# ``shared_rew: False`` every agent has its own goal/reward, and DiCo's
+# homogeneity prior forces a compromise policy; empirically at n=16 /
+# desired_snd=0.5 none of the 16 policies reach their goal and reward stays
+# ~0.01 per step (see DIAGNOSIS.md for the full write-up). n=4 is the largest
+# value we expect to learn with shared_rew=False at desired_snd=0.5. For higher
+# n you should either lower DESIRED_SND or set ``task.shared_rew=True`` on
+# the CLI.
 
 set -euo pipefail
 
@@ -25,7 +35,7 @@ if [[ -f "$ROOT/.venv/bin/activate" ]]; then
   source "$ROOT/.venv/bin/activate"
 fi
 
-N_AGENTS="${N_AGENTS:-16}"
+N_AGENTS="${N_AGENTS:-4}"
 MAX_ITERS="${MAX_ITERS:-300}"
 DESIRED_SND="${DESIRED_SND:-0.5}"
 LOGGERS='experiment.loggers=[]'

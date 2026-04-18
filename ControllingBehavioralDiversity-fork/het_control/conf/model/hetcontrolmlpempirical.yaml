@@ -14,8 +14,12 @@ desired_snd: 0.5
 # The soft-update parameter of the estimated diversity. Must be between 0 and 1
 tau: 0.01
 # Whether on the first iteration the estimated SND should be bootstrapped from the desired snd (True)
-# or from the measured SND (False)
-bootstrap_from_desired_snd: False
+# or from the measured SND (False). True forces iter-0 ``estimated_snd = desired_snd`` so that
+# the very first PPO update sees ``scaling_ratio = 1`` instead of ``desired_snd / raw_SND``;
+# at typical random-init raw SND of ~0.03, the latter yields a ~15x amplification of essentially
+# noise, which our n=16 Navigation runs showed can destabilise early training (see DIAGNOSIS.md
+# H2). This matches what reverse_transport_iddpg_config.yaml already does.
+bootstrap_from_desired_snd: True
 # Whether to process the homogeneous part of the policy
 # with a tanh squashing operation to the action space domain
 process_shared: True
