@@ -1,31 +1,22 @@
-"""Crash-only smoke test for DiCo-Navigation with Graph-SND.
+"""Lightweight smoke test for DiCo-Navigation with Graph-SND.
 
-Runs 5 PPO iterations at ``n_agents=4`` against one of the three
-Graph-SND config variants and asserts only that
+Runs a short PPO job at ``n_agents=4`` against one of the three Graph-SND
+config variants, then checks:
 
-1. the training subprocess exits with code 0,
-2. ``graph_snd_log.csv`` exists with at least 5 data rows,
-3. none of ``snd_t`` / ``reward_mean`` / ``metric_time_ms`` is NaN / inf.
+1. Trainer exits 0; CSV has enough rows; core numeric columns are finite.
+2. **Applied SND** (what the environment sees after DiCo scaling) tracks
+   ``snd_des``: the mean of ``applied_snd`` over the **last 10** iterations
+   must be within ``APPLIED_SND_TOLERANCE`` of ``snd_des``. Raw ``snd_t``
+   (estimated diversity of *unscaled* agent deltas) is **not** asserted to
+   move toward ``snd_des`` — DiCo intentionally lets raw spread grow while
+   ``scaling_ratio = snd_des / distance`` shrinks so their product stays near
+   target (see DIAGNOSIS.md and n=2 paper-style baselines).
+3. **Reward** does not catastrophically collapse vs the start of the window.
 
-That is all the smoke test checks. It deliberately does *not* check
-whether ``snd_t`` moved toward ``snd_des``, whether reward rose, or
-whether the scaling ratio is sane.
-
-Why so weak? Three earlier revisions of this smoke test included
-direction / runaway / magnitude / learning-signal checks and each
-revision was used to validate a different speculative "fix" that later
-failed in the real run. The root cause of the repeated false-positive
-/ false-negative behavior, documented in DIAGNOSIS.md Postmortem #2,
-is that the smoke PPO regime (``n_minibatch_iters=5``,
-``minibatch_size=2048`` -> ~15 ``_forward`` calls per iter) is not the
-same dynamical system as the real-run regime
-(``n_minibatch_iters=45``, ~675 forwards per iter). The
-``tau=0.01`` soft-update inside ``estimate_snd`` produces qualitatively
-different ``estimated_snd`` trajectories in the two regimes:
-``0.99^15 ~ 0.86`` vs ``0.99^675 ~ 1.1e-3``. Any behavior-based
-assertion calibrated on the smoke regime is therefore a coin-flip for
-real-run behavior. Reducing the smoke to a crash check honestly
-reflects what it can reliably detect without inventing false signal.
+The smoke PPO inner loop (``n_minibatch_iters=5``) still differs from full
+paper runs (45), so tolerances are modest. This test catches broken
+instrumentation (NaN ``applied_snd``), missing CSV columns, and gross
+control failure.
 
 Usage (from the DiCo fork root):
 
@@ -33,12 +24,7 @@ Usage (from the DiCo fork root):
     python tests/smoke_dico_training.py --config navigation_ippo_graph_p01_config
     python tests/smoke_dico_training.py --config navigation_ippo_graph_p025_config
 
-Exits 0 on pass, non-zero on fail. The orchestrator in
-``scripts/run_graph_dico_two_gpus_then_third.sh`` still invokes this
-(indirectly via the ``kill -0`` post-launch health check); the check
-being crash-only is sufficient there -- it catches missing GPUs,
-import-time regressions, and Hydra misconfigurations, which is all a
-pre-launch smoke can reliably detect.
+Exits 0 on pass, non-zero on fail.
 """
 
 from __future__ import annotations
@@ -64,19 +50,14 @@ SUPPORTED_CONFIGS = (
 FORK_ROOT = Path(__file__).resolve().parent.parent
 RUNNER_REL = Path("het_control/run_scripts/run_navigation_ippo.py")
 
-# Smoke knobs. Budget targets < 60 s on a modern GPU:
-#   * 5 iters x ~5 s/iter (VMAS vectorised step + 5 PPO minibatch iters)
-#     ~ 25-30 s core training
-#   * 10-20 s of Python / TorchRL / VMAS import and setup
-# Everything is sized for the *crash check*: we just need the trainer
-# to get far enough to write several CSV rows.
+# Enough iterations for a stable last-10 mean of applied_snd (see check_csv).
 SMOKE_OVERRIDES: Tuple[str, ...] = (
     "task.n_agents=4",
     "experiment.on_policy_collected_frames_per_batch=6000",
     "experiment.on_policy_n_envs_per_worker=30",
     "experiment.on_policy_n_minibatch_iters=5",
     "experiment.on_policy_minibatch_size=2048",
-    "experiment.max_n_iters=5",
+    "experiment.max_n_iters=15",
     "experiment.max_n_frames=1000000",
     "experiment.evaluation=false",
     "experiment.loggers=[]",
@@ -85,16 +66,18 @@ SMOKE_OVERRIDES: Tuple[str, ...] = (
     "experiment.checkpoint_interval=0",
 )
 
-MIN_ROWS = 5
+MIN_ROWS = 15
+LAST_N_APPLIED = 10
+APPLIED_SND_TOLERANCE = 0.05
 
-# Columns we require to be present AND finite. Other columns may be
-# NaN (the new diagnostic columns -- scaling_ratio_mean, applied_snd,
-# out_loc_norm_mean -- are best-effort per callback.py; see
-# DIAGNOSIS.md Postmortem #2).
+# Columns that must exist and be finite on every row (control + task signals).
 REQUIRED_FINITE_COLUMNS: Tuple[str, ...] = (
     "snd_t",
+    "snd_des",
     "reward_mean",
     "metric_time_ms",
+    "scaling_ratio_mean",
+    "applied_snd",
 )
 
 
@@ -144,7 +127,7 @@ def run_trainer(config_name: str, workdir: Path, timeout_s: float) -> None:
 
 
 # ---------------------------------------------------------------------------
-# CSV checks (crash-only)
+# CSV checks
 # ---------------------------------------------------------------------------
 
 
@@ -162,36 +145,31 @@ def load_csv(csv_path: Path) -> List[Dict[str, str]]:
     return rows
 
 
-def check_csv(rows: List[Dict[str, str]]) -> None:
-    """Crash-only CSV assertions.
+def _mean(xs: List[float]) -> float:
+    return sum(xs) / len(xs) if xs else float("nan")
 
-    We check row count and that the three numeric columns we rely on
-    downstream are finite. We deliberately do *not* check direction,
-    runaway, magnitude, or learning-signal -- see module docstring and
-    DIAGNOSIS.md Postmortem #2 for why.
-    """
+
+def check_csv(rows: List[Dict[str, str]]) -> None:
+    """Finite columns + applied_snd tracking + mild reward guard."""
     if len(rows) < MIN_ROWS:
         _fail(
             f"expected at least {MIN_ROWS} CSV rows, got {len(rows)}; "
-            f"the trainer did not complete {MIN_ROWS} iterations "
-            f"(likely a crash mid-run -- inspect stdout.log in the workdir)."
+            f"increase experiment.max_n_iters in SMOKE_OVERRIDES or fix crashes."
         )
     print(f"[smoke] check 1 OK: CSV has {len(rows)} rows (>= {MIN_ROWS})")
 
-    missing: List[str] = []
     for col in REQUIRED_FINITE_COLUMNS:
         if col not in rows[0]:
-            missing.append(col)
-    if missing:
-        _fail(f"CSV is missing required columns: {missing}")
+            _fail(
+                f"CSV missing column {col!r}; need graph_snd instrumentation "
+                f"(scaling_ratio_mean, applied_snd) on this fork."
+            )
 
     for col in REQUIRED_FINITE_COLUMNS:
         for i, row in enumerate(rows):
             raw = row.get(col, "")
             if raw is None or raw == "":
-                _fail(
-                    f"row iter={i}: missing value for required column '{col}'"
-                )
+                _fail(f"row iter={i}: missing value for column '{col}'")
             try:
                 value = float(raw)
             except ValueError:
@@ -200,12 +178,60 @@ def check_csv(rows: List[Dict[str, str]]) -> None:
                 )
             if math.isnan(value) or math.isinf(value):
                 _fail(
-                    f"column '{col}' has non-finite value {value!r} at "
-                    f"iter={i}; training became numerically unstable"
+                    f"column '{col}' has non-finite value {value!r} at iter={i}. "
+                    f"If scaling_ratio_mean/applied_snd are NaN, per-forward "
+                    f"metrics are not reaching the CSV (see het_control/callback.py "
+                    f"and HetControlMlpEmpirical.consume_csv_metric_means)."
                 )
     print(
         f"[smoke] check 2 OK: no NaN / inf in "
         f"{', '.join(REQUIRED_FINITE_COLUMNS)}"
+    )
+
+    snd_des_vals = [float(r["snd_des"]) for r in rows]
+    snd_des = snd_des_vals[0]
+    _eps = max(1e-4, abs(snd_des) * 1e-5)
+    if not all(abs(v - snd_des) < _eps for v in snd_des_vals):
+        _fail("snd_des changed mid-run (expected fixed Hydra buffer)")
+    print(f"[smoke] check 3 OK: snd_des constant = {snd_des:g}")
+
+    # Last-10 mean of applied SND vs target (DiCo invariant on actions).
+    tail = rows[-LAST_N_APPLIED:]
+    applied_tail = [float(r["applied_snd"]) for r in tail]
+    mean_applied = _mean(applied_tail)
+    dev = abs(mean_applied - snd_des)
+    if dev > APPLIED_SND_TOLERANCE:
+        _fail(
+            f"applied_snd control check failed: mean(last {LAST_N_APPLIED})="
+            f"{mean_applied:.6f}, snd_des={snd_des:.6f}, |delta|={dev:.6f} "
+            f"(tolerance {APPLIED_SND_TOLERANCE}). Raw snd_t is not required to "
+            f"match snd_des; applied_snd should."
+        )
+    print(
+        f"[smoke] check 4 OK: mean(applied_snd last {LAST_N_APPLIED})="
+        f"{mean_applied:.6f} within {APPLIED_SND_TOLERANCE:g} of snd_des="
+        f"{snd_des:g}"
+    )
+
+    # Reward: no large collapse vs start of run (same window sizes as applied).
+    reward_all = [float(r["reward_mean"]) for r in rows]
+    head = reward_all[:LAST_N_APPLIED]
+    tail_r = reward_all[-LAST_N_APPLIED:]
+    mean_head = _mean(head)
+    mean_tail_r = _mean(tail_r)
+    if mean_tail_r < -0.02:
+        _fail(
+            f"reward tail mean {mean_tail_r:.6f} is catastrophically negative "
+            f"(policy not learning at all in smoke window)"
+        )
+    if mean_tail_r < mean_head - 0.01:
+        _fail(
+            f"reward regressed: mean first {LAST_N_APPLIED} iters = {mean_head:.6f}, "
+            f"mean last {LAST_N_APPLIED} = {mean_tail_r:.6f} (allowed drop 0.01)"
+        )
+    print(
+        f"[smoke] check 5 OK: reward mean first {LAST_N_APPLIED}={mean_head:.6f}, "
+        f"last {LAST_N_APPLIED}={mean_tail_r:.6f}"
     )
 
 
@@ -246,11 +272,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--timeout",
         type=float,
-        default=120.0,
+        default=240.0,
         help=(
             "Hard wall-clock budget in seconds for the trainer subprocess. "
-            "A 5-iteration smoke typically finishes in ~50-70 s on a modern "
-            "GPU including imports; default 120 s provides ~50 s headroom."
+            "15 iterations typically finish in ~90-150 s on a modern GPU."
         ),
     )
     parser.add_argument(
@@ -297,11 +322,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     print(f"config  : {args.config}")
     print(f"rows    : {len(rows)}")
     print(f"snd_t   : {rows[0]['snd_t']} -> {rows[-1]['snd_t']}")
+    print(f"applied : {rows[0]['applied_snd']} -> {rows[-1]['applied_snd']}")
     print(f"reward  : {rows[0]['reward_mean']} -> {rows[-1]['reward_mean']}")
     print(f"workdir : {workdir}")
-    print("Note: this is a crash-only check. It does NOT verify whether")
-    print("the DiCo control loop is converging -- that is only observable")
-    print("at real-run PPO granularity. See DIAGNOSIS.md Postmortem #2.")
+    print("Primary invariant: applied_snd ~ snd_des (not raw snd_t).")
     print("=================================================")
 
     if created_tempdir and not args.keep_workdir:

@@ -50,6 +50,17 @@ which means the policy never learned Navigation**. The runaway `snd_t` is a
 symptom of *training instability growing the raw weights*, not a symptom of
 DiCo's control-theoretic loop breaking.
 
+**Update (instrumented runs, n=2 Navigation).** With per-iteration
+`scaling_ratio_mean` and `applied_snd` in `graph_snd_log.csv`, a healthy
+paper-style run can show **raw `snd_t` growing large** while
+`mean(scaling_ratio)` shrinks so **`applied_snd` stays near `snd_des`**
+(roughly `snd_t × scaling_ratio_mean ≈ snd_des`). Do not judge the control
+loop from raw `snd_t` alone; use `applied_snd` (and reward) as the primary
+outcomes. The pre-training smoke test
+([tests/smoke_dico_training.py](tests/smoke_dico_training.py)) checks that
+the last-10-iter mean of `applied_snd` is within tolerance of `snd_des`, not
+that raw `snd_t` moves toward the target.
+
 ## Ranked hypotheses
 
 ### H1 (most likely) — task regime mismatch
@@ -515,11 +526,11 @@ evidence to pick between the two branches above:
    `experiment.off_policy_init_random_frames` via `HYDRA_EXTRA` (see
    script header). Reward should climb over a long enough horizon if the
    fork is healthy.
-3. **Smoke-test simplified to crash-only**: the current smoke misled
-   three diagnoses in a row because its dynamical regime does not
-   match real runs. It is now reduced to "process exits 0, CSV has ≥ 5
-   rows, no NaN in the numeric columns" and nothing more. See
-   [tests/smoke_dico_training.py](tests/smoke_dico_training.py).
+3. **Smoke test (revised again)**: an earlier crash-only version avoided
+   false conclusions about raw `snd_t`. Once `applied_snd` is logged
+   reliably, the smoke test checks **mean(last 10 `applied_snd`) ≈
+   `snd_des`** (±0.05) plus mild reward guards — not raw `snd_t` vs
+   `snd_des`. See [tests/smoke_dico_training.py](tests/smoke_dico_training.py).
 
 ### Decision rule after the sanity baseline
 
