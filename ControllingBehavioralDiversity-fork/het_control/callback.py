@@ -193,6 +193,13 @@ class GraphSNDLoggingCallback(Callback):
     Writes one row per PPO iteration with columns
     ``iter, seed, n_agents, estimator, p, snd_t, snd_des, reward_mean,
     metric_time_ms, scaling_ratio_mean, applied_snd, out_loc_norm_mean``
+
+    ``scaling_ratio_mean`` / ``out_loc_norm_mean`` are taken from
+    :class:`~het_control.models.het_control_mlp_empirical.HetControlMlpEmpirical`
+    per-iteration aggregates (mean over all grad-mode policy forwards in
+    that iteration), because BenchMARL's ``training_td`` at
+    ``on_train_end`` often omits those keys for IPPO/MADDPG. If the
+    aggregate is empty, we fall back to ``training_td`` when present.
     to a user-supplied CSV path. The row is flushed (with ``os.fsync``) so a
     killed run still has partial data on disk.
 
@@ -349,12 +356,15 @@ class GraphSNDLoggingCallback(Callback):
             float(sum(times) / len(times)) if times else float("nan")
         )
 
-        scaling_ratio_mean = _batch_tensor_mean(
-            training_td, (group, "scaling_ratio")
-        )
-        out_loc_norm_mean = _batch_tensor_mean(
-            training_td, (group, "out_loc_norm")
-        )
+        scaling_ratio_mean, out_loc_norm_mean = model.consume_csv_metric_means()
+        if not math.isfinite(scaling_ratio_mean):
+            scaling_ratio_mean = _batch_tensor_mean(
+                training_td, (group, "scaling_ratio")
+            )
+        if not math.isfinite(out_loc_norm_mean):
+            out_loc_norm_mean = _batch_tensor_mean(
+                training_td, (group, "out_loc_norm")
+            )
         if math.isfinite(snd_t) and math.isfinite(scaling_ratio_mean):
             applied_snd = snd_t * scaling_ratio_mean
         else:

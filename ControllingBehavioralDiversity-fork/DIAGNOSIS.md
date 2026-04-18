@@ -494,7 +494,14 @@ evidence to pick between the two branches above:
    columns so the CSV shows the quantity DiCo is actually controlling
    (applied SND) rather than only raw per-agent spread (`snd_t`). The
    `snd_t=165` plateau from the first n=16 runs does not by itself
-   prove DiCo failed — `applied_snd` does.
+   prove DiCo failed — `applied_snd` does. The first implementation read
+   `scaling_ratio` from BenchMARL's `training_td` at `on_train_end`, which
+   is empty for IPPO (and often for MADDPG), so those columns were all NaN.
+   The fix is to **average `scaling_ratio` and `out_loc_norm` inside
+   `HetControlMlpEmpirical._forward` over grad-mode forwards** each
+   iteration and have the callback call `consume_csv_metric_means()` when
+   writing the row. For ad-hoc prints from the forward path, set
+   `HET_CONTROL_DICO_DEBUG_FORWARDS=20` in the environment.
 2. **DiCo-validated sanity baseline**: new
    [het_control/conf/dispersion_maddpg_full_config.yaml](het_control/conf/dispersion_maddpg_full_config.yaml),
    [het_control/run_scripts/run_dispersion_maddpg_full.py](het_control/run_scripts/run_dispersion_maddpg_full.py),

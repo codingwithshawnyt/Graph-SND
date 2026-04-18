@@ -4,8 +4,9 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, MISSING
-from typing import Type, Sequence, Optional
+from typing import Type, Sequence, Optional, Tuple
 
 import torch
 from tensordict import TensorDictBase
@@ -115,6 +116,35 @@ class HetControlMlpEmpirical(Model):
             num_cells=self.num_cells,
         )  # Per-agent networks that output mean deviations from the shared policy
 
+        # Per-iteration sums for CSV diagnostics. BenchMARL's ``on_train_end``
+        # ``training_td`` often does not retain ``(group, "scaling_ratio")`` /
+        # ``out_loc_norm`` for IPPO (and similarly for MADDPG), so
+        # :class:`GraphSNDLoggingCallback` aggregates these from every
+        # ``torch.is_grad_enabled()`` forward in the iteration instead.
+        self.reset_csv_metric_accumulators()
+        self._dico_debug_prints_done = 0
+
+    def reset_csv_metric_accumulators(self) -> None:
+        """Clear sums used by :class:`GraphSNDLoggingCallback` (call once per iter)."""
+        self._csv_forward_count = 0
+        self._csv_scaling_ratio_sum = 0.0
+        self._csv_out_loc_norm_sum = 0.0
+
+    def consume_csv_metric_means(self) -> Tuple[float, float]:
+        """Return mean ``scaling_ratio`` and ``out_loc_norm`` for this iter, then reset.
+
+        If no grad-enabled forwards ran this iteration, returns ``(nan, nan)``.
+        """
+        if getattr(self, "_csv_forward_count", 0) <= 0:
+            sr_mean = float("nan")
+            ol_mean = float("nan")
+        else:
+            n = float(self._csv_forward_count)
+            sr_mean = self._csv_scaling_ratio_sum / n
+            ol_mean = self._csv_out_loc_norm_sum / n
+        self.reset_csv_metric_accumulators()
+        return sr_mean, ol_mean
+
     def _perform_checks(self):
         super()._perform_checks()
 
@@ -204,6 +234,52 @@ class HetControlMlpEmpirical(Model):
             out_loc_norm = overflowing_logits_norm(
                 out, self.action_spec[self.agent_group, "action"]
             )  # For logging
+
+        # Aggregate control metrics across all grad-mode forwards this iteration
+        # (BenchMARL's training_td at on_train_end often omits these keys for IPPO).
+        if torch.is_grad_enabled():
+            sr_tensor = (
+                scaling_ratio
+                if isinstance(scaling_ratio, torch.Tensor)
+                else torch.tensor(
+                    scaling_ratio, device=out.device, dtype=out.dtype
+                )
+            )
+            self._csv_scaling_ratio_sum += float(
+                sr_tensor.detach().float().mean().item()
+            )
+            self._csv_out_loc_norm_sum += float(
+                out_loc_norm.detach().float().mean().item()
+            )
+            self._csv_forward_count += 1
+
+        _dbg_n = int(os.environ.get("HET_CONTROL_DICO_DEBUG_FORWARDS", "0") or "0")
+        if (
+            _dbg_n > 0
+            and torch.is_grad_enabled()
+            and compute_estimate
+            and self.n_agents > 1
+            and self.desired_snd.item() > 0
+        ):
+            if self._dico_debug_prints_done < _dbg_n:
+                with torch.no_grad():
+                    if isinstance(distance, torch.Tensor):
+                        dist_m = float(distance.detach().float().mean().item())
+                    else:
+                        dist_m = float(distance)
+                    if isinstance(scaling_ratio, torch.Tensor):
+                        sr_m = float(scaling_ratio.detach().float().mean().item())
+                    else:
+                        sr_m = float(scaling_ratio)
+                    est_m = float(self.estimated_snd.detach().mean().item())
+                    des_m = float(self.desired_snd.detach().mean().item())
+                print(
+                    "[HetControlMlpEmpirical DiCo debug] "
+                    f"dist_mean={dist_m:.6f} est_mean={est_m:.6f} des={des_m:.6f} "
+                    f"scale_mean={sr_m:.6f}",
+                    flush=True,
+                )
+                self._dico_debug_prints_done += 1
 
         tensordict.set(
             (self.agent_group, "estimated_snd"),

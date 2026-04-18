@@ -21,7 +21,8 @@ control loop. Training, losses, and rollouts are otherwise unchanged.
 | :--- | :--- |
 | `het_control/models/het_control_mlp_empirical.py` | `estimate_snd` calls `time_diversity_call(compute_diversity, …)` instead of only `compute_behavioral_distance`; adds `diversity_estimator`, `diversity_p`, and passes `get_graph_rng(self)` into `compute_diversity` (generator not stored on the module). |
 | `het_control/run.py` | Registers `GraphSNDLoggingCallback` when `graph_snd_log_path` is set. |
-| `het_control/callback.py` | Adds `GraphSNDLoggingCallback`: per-iteration CSV (`iter`, `seed`, `n_agents`, `estimator`, `p`, `snd_t`, `snd_des`, `reward_mean`, `metric_time_ms`), calls `reseed_graph_rng(model, seed * 10000 + iter)` each iter. |
+| `het_control/callback.py` | Adds `GraphSNDLoggingCallback`: per-iteration CSV (including `scaling_ratio_mean`, `applied_snd`, `out_loc_norm_mean`), `reseed_graph_rng` each iter. Control columns are read from **per-iteration aggregates on** `HetControlMlpEmpirical` (mean over grad-mode forwards), with fallback to `training_td` if present. |
+| `het_control/models/het_control_mlp_empirical.py` | Same Graph-SND `estimate_snd` dispatch as above; adds forward-path sums for CSV diagnostics and optional ``HET_CONTROL_DICO_DEBUG_FORWARDS=N`` stderr lines (first ``N`` grad-mode estimate forwards). |
 | `het_control/conf/model/hetcontrolmlpempirical.yaml` | Defaults `diversity_estimator: full`, `diversity_p: 1.0`, and `desired_snd: 0.5` so Hydra runs do not leave `desired_snd` as null (which breaks `torch.tensor([desired_snd], …)` in `HetControlMlpEmpirical.__init__`). |
 | `het_control/conf/navigation_ippo_config.yaml` | Adds `graph_snd_log_path: null`. |
 
