@@ -201,3 +201,180 @@ iter 0 to within 2× of `snd_des = 0.5` by iter 15-30 and stays there;
 iter 50 and continues climbing. All three variants (`full`, `graph_p01`,
 `graph_p025`) should track within a few % of each other, as they already
 did in the broken runs.
+
+## Postmortem: the n=4 fix did not work
+
+The original analysis above is preserved verbatim as the record of a
+wrong-but-internally-consistent first attempt. After launching the three
+n=4 runs with `bootstrap_from_desired_snd: True`, they failed in the exact
+same way as the n=16 runs — same plateau, same reward floor. H1 and H2
+were both wrong. The real root cause is `desired_snd = 0.5` itself.
+
+### What we re-observed at n=4
+
+Three runs at `n_agents=4`, `desired_snd=0.5`,
+`bootstrap_from_desired_snd=True`, 167 iterations each:
+
+| Run        | iter 0 `snd_t` | iter 166 `snd_t` | iter 166 `reward_mean` |
+|------------|---------------:|-----------------:|-----------------------:|
+| full       | 0.0561         | ~311             | ~0.0116                |
+| graph_p025 | 0.056x         | ~311             | ~0.0116                |
+| graph_p01  | 0.056x         | ~311             | ~0.0116                |
+
+Same tight three-way agreement, same 300×-of-target `snd_t` plateau, same
+stuck-at-zero reward. Reducing `n_agents` from 16 to 4 did not move the
+needle: **H1 is falsified**.
+
+### Why H2 was a no-op at real-run granularity
+
+The key datum is `iter 0 snd_t = 0.0561`, not `0.5`. If
+`bootstrap_from_desired_snd: True` were actually taking effect at real-run
+granularity, the first CSV row should have recorded `snd_t ≈ snd_des = 0.5`,
+not the raw init value.
+
+The reason it did not: look at the soft-update in
+[het_control/models/het_control_mlp_empirical.py](het_control/models/het_control_mlp_empirical.py)
+line 274:
+
+    distance = (1 - self.tau) * self.estimated_snd + self.tau * distance
+             = 0.99 * estimated_snd + 0.01 * raw_measurement
+
+On iter 0, `self.estimated_snd` is seeded with `self.desired_snd = 0.5`
+(the bootstrap). But `_forward` runs this update on every training forward,
+and the PPO inner loop at the real-run config
+(`on_policy_n_minibatch_iters=45`, ~15 minibatches per iter) invokes
+`_forward` ~675 times *within iter 0*. The residual bootstrap contribution
+to `estimated_snd` at the end of iter 0 is therefore
+
+    0.5 * 0.99^675 ≈ 0.5 * 1.1e-3 ≈ 6e-4,
+
+i.e. the bootstrap has fully decayed to the raw measurement before the
+first CSV row is written. The log-callback fires `on_train_end`, so the
+CSV never sees the bootstrapped value — it sees the raw measurement the
+soft-update converged to. **H2 is falsified as a meaningful lever at
+this PPO configuration.**
+
+The flag is still correct-by-design for tasks like
+`reverse_transport_iddpg`, which has a much smaller number of forwards per
+training iteration and so preserves the bootstrap. But for
+`navigation_ippo_config` with `n_minibatch_iters=45`, the flag is a no-op
+at the iteration granularity the CSV logs, and setting it to `True` has no
+observable effect.
+
+### Why the smoke test passed the broken setup
+
+The 12-iter smoke test in the previous plan used
+`on_policy_n_minibatch_iters=5` and `minibatch_size=2048` at
+`collected_frames_per_batch=6000`, yielding ~15 `_forward` calls per iter.
+That leaves
+
+    0.99^15 ≈ 0.86
+
+so the bootstrap retains 86% of its weight across iter 0 of the smoke
+test — the smoke test saw `snd_t[0] ≈ 0.44` (bootstrap-dominated) while
+real runs saw `snd_t[0] ≈ 0.05` (raw-dominated). Completely different
+starting conditions, same code. The smoke test's `stayed_near_target`
+fallback at `check 5` then triggered on the (close-to-target) smoke value,
+declaring the direction check passed — exactly the combination that lets
+a broken setup slip through.
+
+This is the second and third failure of the previous attempt:
+- **H2-reasoning failure**: we inferred the wrong dynamics from the
+  smoke-test `snd_t[0]` instead of the real-run value.
+- **Smoke-test failure**: our direction check had a loophole specifically
+  calibrated to the bootstrap-dominated regime the smoke test accidentally
+  produces; it would not catch the raw-init regime real runs use.
+
+### The actual root cause: `desired_snd = 0.5` is outside the paper's tested regime
+
+The DiCo README's own Navigation examples use:
+
+| README line | `desired_snd` value | Context                                 |
+|-------------|---------------------|-----------------------------------------|
+| 49          | `0.1`               | IPPO Navigation reproduction example    |
+| 59          | `0.3`               | MADDPG Navigation reproduction example  |
+| 64          | `{-1, 0, 0.3}`      | Reported Navigation diversity sweep     |
+| 100         | `0.3`               | IPPO Navigation reproduction example    |
+
+0.5 appears nowhere — not in the README, not in any of the upstream
+config files. It was invented in this fork when we set a concrete default
+for `desired_snd` in `hetcontrolmlpempirical.yaml` (originally `null`, see
+`GRAPH_SND_CHANGES.md` line 25). At 0.5 on the n=2-to-n=4 Navigation scale
+we are asking for a spread the policy network cannot produce consistently
+under PPO's trust-region step sizes. The scaling invariant
+`SND(agent_loc) = scaling_ratio × SND(agent_out)` still holds at every
+forward, but PPO grows raw `agent_out` unboundedly to try to drag
+`SND(agent_loc)` up to `0.5` — `snd_t` climbs 5.3% per iter, reaches ~311
+by iter 166, and `reward_mean` is the loser: the raw outputs are now
+dominated by magnitude growth in service of the DiCo target, not by
+task-relevant spatial navigation.
+
+### Three new edits
+
+1. **Lower `desired_snd` from 0.5 to 0.1** (paper README line 49) in:
+   - [het_control/conf/model/hetcontrolmlpempirical.yaml](het_control/conf/model/hetcontrolmlpempirical.yaml)
+     line 13
+   - [scripts/run_graph_dico_two_gpus_then_third.sh](scripts/run_graph_dico_two_gpus_then_third.sh)
+     `DESIRED_SND` default
+   - [tests/smoke_dico_training.py](tests/smoke_dico_training.py)
+     `SMOKE_OVERRIDES`
+2. **Revert `bootstrap_from_desired_snd: True → False`** in
+   [het_control/conf/model/hetcontrolmlpempirical.yaml](het_control/conf/model/hetcontrolmlpempirical.yaml).
+   It is a no-op at real-run granularity (see above). The explicit `False`
+   matches the paper's implicit default for Navigation (upstream
+   `navigation_ippo_config.yaml` does not override the flag). Leaving it
+   `True` would give a false sense that we had a knob to tune iter-0
+   behavior for this task; we do not.
+3. **Keep `N_AGENTS=4` in the orchestrator**, but rewrite the justifying
+   comment. n=4 is NOT a stability fix — `desired_snd=0.5` at n=4 diverged
+   just as hard as at n=16. n=4 is kept purely so the
+   between-estimator comparison (`full` vs `graph_p01` vs `graph_p025`)
+   has breadth over the n=2 paper baseline.
+
+### Smoke-test rewrite
+
+[tests/smoke_dico_training.py](tests/smoke_dico_training.py) has been
+rewritten so the failure mode above cannot slip through again:
+
+- Bumped `max_n_iters` 12 → 20; dropped `on_policy_n_envs_per_worker`
+  60 → 30 to hold the budget under 2 minutes.
+- Deleted the `stayed_near_target` clause in the direction check.
+- Added a **runaway check**: `max(snd_t[-5:]) / mean(snd_t[5:10]) ≤ 1.5`.
+  A healthy run plateaus near `snd_des` so the ratio is ~1.0; the broken
+  `desired_snd=0.5` dynamics produces a ratio ≈ 1.76 within 20 iters.
+- Tightened the final-iter magnitude check from a 10× window to a 3×
+  window: `0.3 × snd_des ≤ snd_t[-1] ≤ 3.0 × snd_des`.
+- Replaced "no catastrophic collapse" with a **learning-signal** check:
+  `mean(reward[-5:]) − mean(reward[:5]) ≥ 0.001`. The old check let any
+  run with a tiny positive slope pass; the new one requires the reward
+  actually rise during the smoke window.
+- Added an informational warning if `snd_t[0] > 2.0 × snd_des`, so users
+  notice when the bootstrap regime differs from real runs.
+
+The runaway check is the one that would have caught the broken setup at
+20 iters.
+
+### Confidence and escape hatch
+
+The paper README alignment makes lowering `desired_snd` to 0.1 a
+high-confidence fix (the upstream authors validated exactly this value on
+this exact task). The tightened smoke test is moderate-high confidence; if
+`desired_snd=0.1` still produces `snd_t` runaway or zero reward in real
+runs, the next diagnostic step is to log the per-iter `scaling_ratio`
+alongside `estimated_snd` in
+[het_control/callback.py](het_control/callback.py) — a ratio collapsing to
+zero would indicate a gradient-flow bug, not a hyperparameter problem.
+
+### Updated expected trajectory (at `desired_snd = 0.1`)
+
+- **iter 0**: raw `snd_t` starts ~0.03-0.06 (random init); `scaling_ratio`
+  starts near `0.1 / 0.05 = 2`, small enough to not blow up PPO.
+- **iter 5-15**: `snd_t` rises toward 0.1, stabilising in roughly
+  [0.05, 0.15]. Smoke-test runaway check must hold here.
+- **iter 15-30**: `snd_t` is within ~1.5× of `snd_des = 0.1`; `reward_mean`
+  visibly positive and climbing — by iter 30 we expect ≥ ~0.05 per step.
+- **iter 50+**: `reward_mean` in the 0.1-0.3 per-step range, consistent
+  with paper-like Navigation learning at n=4.
+- **iter 167 (full run)**: `reward_mean` plateaus near 0.3-0.5 per step,
+  and `snd_t` fluctuates within [0.03, 0.3]. All three estimator variants
+  should track within a few percent.

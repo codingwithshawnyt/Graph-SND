@@ -7,19 +7,31 @@ num_cells: [256, 256]
 # Activation class between MLP layers. Any torch.nn activation works
 activation_class: torch.nn.Tanh
 
-# The desired SND diversity (DiCo target SND_des). Must be a real scalar; upstream
-# examples often override on the CLI (e.g. model.desired_snd=0.1). Default 0.5
-# matches common navigation experiments and the Graph-DiCo smoke configs.
-desired_snd: 0.5
+# The desired SND diversity (DiCo target SND_des). Must be a real scalar; the original
+# upstream value was ``null`` (see GRAPH_SND_CHANGES.md line 25), which we have to set
+# to a float here because ``HetControlMlpEmpirical.__init__`` passes this value straight
+# into ``torch.tensor([desired_snd], ...)``. Default 0.1 matches the Bettini et al. 2024
+# ICML paper's README examples for Navigation (see ControllingBehavioralDiversity-fork
+# README lines 49, 59, 64, 100 -- values used are 0.1 / 0.3 / -1, never 0.5). Higher
+# targets such as 0.5 are outside the paper-tested regime for Navigation and
+# empirically cause the raw per-agent MLP outputs to grow unboundedly while the
+# applied-action SND stays near-target, with reward stuck near zero (see DIAGNOSIS.md
+# Postmortem). Override on the CLI with ``model.desired_snd=0.3`` if you need the
+# higher-diversity paper setting.
+desired_snd: 0.1
 # The soft-update parameter of the estimated diversity. Must be between 0 and 1
 tau: 0.01
-# Whether on the first iteration the estimated SND should be bootstrapped from the desired snd (True)
-# or from the measured SND (False). True forces iter-0 ``estimated_snd = desired_snd`` so that
-# the very first PPO update sees ``scaling_ratio = 1`` instead of ``desired_snd / raw_SND``;
-# at typical random-init raw SND of ~0.03, the latter yields a ~15x amplification of essentially
-# noise, which our n=16 Navigation runs showed can destabilise early training (see DIAGNOSIS.md
-# H2). This matches what reverse_transport_iddpg_config.yaml already does.
-bootstrap_from_desired_snd: True
+# Whether on the first iteration the estimated SND should be bootstrapped from the
+# desired snd (True) or from the measured SND (False). False matches the implicit
+# paper default for Navigation (upstream ``navigation_ippo_config.yaml`` does not
+# override it). We briefly set this to True in an earlier fix attempt; it turned out
+# to be a no-op at real-run granularity because with ``tau=0.01`` and ~675 PPO
+# forwards per iter, the soft-update in ``estimate_snd`` decays the bootstrap to the
+# raw measurement within iter 0 itself (``0.5 * 0.99^675 ~ 6e-4``), so the iter-end
+# CSV never sees the bootstrap value. See DIAGNOSIS.md Postmortem. Explicit True
+# remains correct for ``reverse_transport_iddpg_config.yaml``, which uses a very
+# different per-iter forward count.
+bootstrap_from_desired_snd: False
 # Whether to process the homogeneous part of the policy
 # with a tanh squashing operation to the action space domain
 process_shared: True

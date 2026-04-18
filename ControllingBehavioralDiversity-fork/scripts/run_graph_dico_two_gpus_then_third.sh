@@ -12,17 +12,21 @@
 #   launch the third — keep it alive with nohup/tmux.)
 #
 # Override defaults with env vars, e.g.:
-#   N_AGENTS=100 MAX_ITERS=500 DESIRED_SND=0.5 bash scripts/run_graph_dico_two_gpus_then_third.sh
+#   N_AGENTS=8 MAX_ITERS=500 DESIRED_SND=0.3 bash scripts/run_graph_dico_two_gpus_then_third.sh
 #
-# Why N_AGENTS default is 4 (and NOT 16): Bettini et al. 2024 (ICML) validated
-# DiCo-Navigation at n=2 (see het_control/conf/task/vmas/navigation.yaml). With
-# ``shared_rew: False`` every agent has its own goal/reward, and DiCo's
-# homogeneity prior forces a compromise policy; empirically at n=16 /
-# desired_snd=0.5 none of the 16 policies reach their goal and reward stays
-# ~0.01 per step (see DIAGNOSIS.md for the full write-up). n=4 is the largest
-# value we expect to learn with shared_rew=False at desired_snd=0.5. For higher
-# n you should either lower DESIRED_SND or set ``task.shared_rew=True`` on
-# the CLI.
+# Why DESIRED_SND default is 0.1 (and NOT 0.5): the Bettini et al. 2024 (ICML)
+# DiCo README's own Navigation examples use ``model.desired_snd=0.1`` (README
+# line 49), 0.3 (lines 59 and 100), and sweep ``{-1, 0, 0.3}`` (line 64).
+# 0.5 is NOT a paper-tested value; empirically at desired_snd=0.5 the raw
+# per-agent MLP outputs grow unboundedly while the DiCo-scaled action SND
+# stays near target, and reward stalls at ~0.01 per step regardless of
+# n_agents (see DIAGNOSIS.md Postmortem for the full write-up). 0.1 is the
+# safest paper value; override to 0.3 on the CLI if you want the
+# higher-diversity paper setting.
+#
+# Why N_AGENTS default is 4: not a stability fix (the desired_snd=0.5 runs
+# also failed at n=4); 4 is kept purely for between-estimator comparison
+# breadth versus the n=2 paper configuration.
 
 set -euo pipefail
 
@@ -37,7 +41,7 @@ fi
 
 N_AGENTS="${N_AGENTS:-4}"
 MAX_ITERS="${MAX_ITERS:-300}"
-DESIRED_SND="${DESIRED_SND:-0.5}"
+DESIRED_SND="${DESIRED_SND:-0.1}"
 LOGGERS='experiment.loggers=[]'
 
 # Hydra: put --config-name before overrides (matches a known-good manual CLI).
