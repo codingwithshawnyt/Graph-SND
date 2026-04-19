@@ -19,8 +19,10 @@ buffer once per PPO iteration.
 from __future__ import annotations
 
 import logging
+import sys
 import time
 import weakref
+from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
 import torch
@@ -28,6 +30,47 @@ import torch
 from het_control.snd import compute_behavioral_distance, compute_statistical_distance
 
 logger = logging.getLogger(__name__)
+
+# Lazily resolved ``knn_edges`` from the sibling ``graphsnd`` package (lives at
+# the Graph-SND repo root, not inside ``ControllingBehavioralDiversity-fork``).
+# Riddle-style setups often forget ``pip install -e ..`` from the repo root; we
+# prepend the root to ``sys.path`` once so ``import graphsnd`` works anyway.
+_knn_edges_impl = None
+
+
+def _get_knn_edges():
+    """Return ``graphsnd.graphs.knn_edges``, bootstrapping repo-root ``sys.path`` if needed."""
+    global _knn_edges_impl
+    if _knn_edges_impl is not None:
+        return _knn_edges_impl
+    try:
+        from graphsnd.graphs import knn_edges as _fn
+
+        _knn_edges_impl = _fn
+        return _fn
+    except ModuleNotFoundError:
+        repo_root = Path(__file__).resolve().parents[2]
+        gs_dir = repo_root / "graphsnd"
+        if gs_dir.is_dir() and str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+            logger.info(
+                "Prepended %s to sys.path so ``import graphsnd`` resolves "
+                "(``pip install -e .`` from that directory avoids this).",
+                repo_root,
+            )
+        try:
+            from graphsnd.graphs import knn_edges as _fn
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "Could not import ``graphsnd`` (needed for k-NN Graph-SND). "
+                "From the Graph-SND repository root (the directory that contains "
+                "``graphsnd/`` and ``ControllingBehavioralDiversity-fork/``), run: "
+                "``pip install -e .``"
+            ) from exc
+
+        _knn_edges_impl = _fn
+        return _fn
+
 
 # Per-policy ``torch.Generator`` for Bernoulli edge draws. These must **not** be
 # stored as attributes on ``nn.Module`` because TorchRL's PPO loss deep-copies
@@ -236,7 +279,7 @@ def compute_knn_edges(
         ``n_agents <= k``, because the k-NN graph is undefined when
         every agent is already a neighbour of every other.
     """
-    from graphsnd.graphs import knn_edges
+    knn_edges = _get_knn_edges()
 
     n = positions.shape[0]
     if n <= k:
