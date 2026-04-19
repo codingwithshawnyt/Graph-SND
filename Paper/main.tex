@@ -78,7 +78,7 @@ estimator of full SND, with a Hoeffding-type concentration bound yielding
 $O(1/\sqrt{m})$ error in the number of sampled edges $m$, independent of $n$.
 We prove six formal properties, recovery, non-negativity,
 graph-automorphism invariance, complexity reduction, unbiasedness, and
-concentration, and verify all experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$. Recovery is numerically exact, the estimator is unbiased to within expected sampling noise, concentration bounds hold with zero violations across 24{,}000 draws, and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio, sustaining a ${\sim}\!10\times$ speedup during active PPO training at $n=100$, with the sampling estimator tracking full $\SND$ indistinguishably throughout. In DiCo on VMAS Goal Navigation at $n{=}16$, replacing the aggregator with Graph-SND matches mean reward and applied-SND set-point tracking while reducing per-batch subroutine time (Figure~\ref{fig:dico-pilot}). On VMAS Dispersion with shared reward ($n{=}10$), $k$-NN Graph-SND matches the learning curve of full pairwise $\SND$ under the same diversity set point and improves terminal reward over diversity control disabled in a representative seed~0 run (Figure~\ref{fig:dico-dispersion-knn}).
+concentration, and verify them experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$; we further evaluate DiCo with Graph-SND on VMAS Dispersion with shared reward ($n{=}10$) alongside the same framework on Goal Navigation ($n{=}16$). Recovery is numerically exact, the estimator is unbiased to within expected sampling noise, concentration bounds hold with zero violations across 24{,}000 draws, and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio, sustaining a ${\sim}\!10\times$ speedup during active PPO training at $n=100$, with the sampling estimator tracking full $\SND$ indistinguishably throughout. On Goal Navigation ($n{=}16$), replacing the DiCo aggregator with Graph-SND matches mean reward and applied-SND set-point tracking while reducing per-batch subroutine time (Figure~\ref{fig:dico-pilot}). On Dispersion ($n{=}10$), $k$-NN Graph-SND matches the learning curve of full pairwise $\SND$ under the same diversity set point and improves terminal reward over diversity control disabled in a representative seed~0 run (Figure~\ref{fig:dico-dispersion-knn}).
 \end{abstract}
 % ============================================================
 \section{Introduction}
@@ -1141,7 +1141,7 @@ unbiased sampling estimator of full SND when edges are drawn
 independently with Horvitz--Thompson weights. We proved six formal
 results, recovery on $K_n$, non-negativity, graph-automorphism
 invariance, a complexity reduction, unbiasedness, and Hoeffding-type
-concentration, and verified all of them experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$.
+concentration, and verified them on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$, with DiCo$\!+\!$Graph-SND pilots on Dispersion ($n{=}10$) and Goal Navigation ($n{=}16$).
 
 The experiments confirm that recovery is numerically exact, the
 Horvitz--Thompson estimator is unbiased to within expected sampling
