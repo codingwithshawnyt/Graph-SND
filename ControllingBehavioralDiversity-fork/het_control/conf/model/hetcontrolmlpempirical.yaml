@@ -54,11 +54,9 @@ diversity_p: 1.0
 # when diversity_estimator == knn.
 diversity_knn_k: 3
 # Per-call cap on the number of parallel envs used when estimating the k-NN
-# Graph-SND scalar. At IPPO minibatch size 4096 the naive per-env loop in
-# ``compute_knn_diversity_per_env`` launches ~120k tiny CUDA kernels per call
-# (O(B * n_agents * k)); at ~675 training forwards/iter that is ~81M launches
-# and training effectively hangs. Capping at 128 uniformly samples a Monte
-# Carlo population of envs per call, giving an unbiased estimator of the same
-# scalar at ~30x lower kernel-launch cost. Override on the CLI with
-# ``model.diversity_knn_subsample_envs=<int>``; set to 0 to disable.
+# Graph-SND scalar. The vectorised path (default) stays O(10) kernel launches
+# regardless of B so this cap is mostly a memory safety net; the original
+# Python per-env loop without a cap launched ~120k tiny CUDA kernels per call
+# and 675 calls/iter, which hangs training. Override on the CLI with
+# ``model.diversity_knn_subsample_envs=<int>``; set to 0 to disable the cap.
 diversity_knn_subsample_envs: 128

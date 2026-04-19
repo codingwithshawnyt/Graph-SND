@@ -359,10 +359,17 @@ class HetControlMlpEmpirical(Model):
         with agent_params.to_module(mlp._empty_net):
             return mlp._empty_net(obs)
 
-    # @torch.no_grad()
+    @torch.no_grad()
     def estimate_snd(self, obs: torch.Tensor):
-        """
-        Update \widehat{SND}
+        """Update the running SND estimate ``\\widehat{SND}``.
+
+        The SND is a *measurement* that DiCo uses to drive the per-agent
+        scaling factor ``SND_des / \\widehat{SND}``. The paper updates
+        this estimate with a running mean each iteration, so we compute
+        it under ``torch.no_grad()``: backprop through the SND graph
+        would otherwise build ~O(B * k * n_agents) autograd nodes per
+        training forward and dominate PPO training cost, for no
+        algorithmic benefit (the gradient weight is only ``tau`` anyway).
         """
         agent_actions = []
         # Gather what actions each agent would take if given the obs tensor.
@@ -374,16 +381,18 @@ class HetControlMlpEmpirical(Model):
             agent_actions.append(agent_outputs)
 
         # Build per-env k-NN positions when the knn estimator is active.
-        # obs has shape [*batch, n_agents, obs_dim]. We flatten all leading
-        # batch dims to get [B, n_agents, obs_dim], then slice [:, :, :2]
-        # to extract agent (x, y) for every parallel environment.
-        # compute_knn_diversity_per_env builds a *different* k-NN graph per
-        # environment so that agents only diversify from their true spatial
-        # neighbours in each env, not from a single snapshot of env 0.
+        # obs has shape [*batch, n_agents, obs_dim]. Flatten leading batch
+        # dims to [B, n_agents, obs_dim] and slice the first two features
+        # as agent (x, y) for every parallel environment.
+        # compute_knn_diversity_per_env builds a *different* k-NN graph
+        # per environment so that agents only diversify from their true
+        # spatial neighbours in each env, not from a single snapshot of
+        # env 0. Keep positions on the action device; the vectorised
+        # knn path does cdist + topk on GPU without any host roundtrip.
         knn_positions = None
         if self.diversity_estimator == "knn":
             obs_flat = obs.reshape(-1, self.n_agents, obs.shape[-1])
-            knn_positions = obs_flat[:, :, :2].detach().float().cpu()
+            knn_positions = obs_flat[:, :, :2].float()
 
         # Dispatch to full SND or Graph-SND based on the configured estimator.
         # ``time_diversity_call`` wraps the call in ``torch.cuda.synchronize()``

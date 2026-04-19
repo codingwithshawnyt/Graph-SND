@@ -302,6 +302,7 @@ def compute_knn_diversity_per_env(
     just_mean: bool = True,
     subsample_envs: Optional[int] = 128,
     subsample_rng: Optional[torch.Generator] = None,
+    use_vectorized: bool = True,
 ) -> torch.Tensor:
     """Per-env k-NN Graph-SND: compute a *different* k-NN graph for each
     parallel environment in the batch, then average the per-env diversity
@@ -312,13 +313,32 @@ def compute_knn_diversity_per_env(
     so a single k-NN graph computed from one environment snapshot would
     impose wrong neighbourhood structure on the rest.
 
-    For large batches the per-env loop becomes a hot path: every env
-    triggers ``k * n_agents`` tiny pairwise-Wasserstein kernel launches,
-    so at ``B = 4096`` (a typical IPPO minibatch) a single call issues
-    order-of-100k CUDA launches. ``subsample_envs`` caps ``B`` by
-    uniformly sampling at most that many envs per call, giving an
-    unbiased Monte Carlo estimate of the same population scalar at a
-    fraction of the kernel-launch cost. Set to ``None`` to disable.
+    Two implementations share this entry point:
+
+    * ``use_vectorized=True`` (default) runs the entire per-env k-NN +
+      pairwise Wasserstein computation as a single fused GPU kernel chain
+      (``torch.cdist`` -> ``torch.topk`` -> ``torch.gather`` -> elementwise
+      norm + mean). No Python-level per-env loop, so at ``B = 4096`` a
+      single call issues O(10) kernel launches instead of the ~120k the
+      Python path triggers. This keeps training-time SND estimation fast
+      enough that IPPO training isn't dominated by CUDA submission
+      overhead. The k-NN graph is built using directed k-NN edges (each
+      agent's top-k neighbours); for the uniform-weight mean this gives
+      the same population scalar as the symmetric edge list used in the
+      Python path, because pairwise Wasserstein is symmetric and mutual
+      neighbours only contribute a double count in both the numerator
+      and the denominator of the mean.
+
+    * ``use_vectorized=False`` falls back to the Python per-env loop over
+      ``compute_knn_edges`` / ``compute_graph_snd_uniform``. Retained
+      because ``tests/`` exercises this path against the reference
+      ``graphsnd.graphs.knn_edges`` implementation.
+
+    For very large ``B`` the vectorised path still allocates
+    ``O(B * n_agents^2)`` intermediate tensors (the pairwise distance
+    matrix and the gathered neighbour actions). ``subsample_envs`` caps
+    ``B`` by uniformly sampling at most that many envs per call, which
+    is an unbiased Monte Carlo estimate of the same population scalar.
 
     Parameters
     ----------
@@ -330,16 +350,18 @@ def compute_knn_diversity_per_env(
     k : int
         Number of nearest neighbours per agent.
     just_mean : bool
-        Forwarded to :func:`compute_graph_snd_uniform`.
+        Forwarded to :func:`compute_graph_snd_uniform`. ``True`` matches
+        the training-time DiCo path (Gaussian mean Wasserstein).
     subsample_envs : int or None, optional
         If set and ``B > subsample_envs``, uniformly sample this many env
-        indices without replacement before the per-env loop. Defaults to
-        ``128``. ``None`` disables subsampling (restores the original
-        behaviour; only use for small ``B``).
+        indices without replacement before computation. Defaults to
+        ``128``. ``None`` disables subsampling.
     subsample_rng : torch.Generator, optional
         RNG used for the env subsample draw (reproducibility). Defaults
-        to a fresh CPU generator seeded by :func:`torch.randperm`'s
-        default behaviour when omitted.
+        to the default torch RNG when omitted.
+    use_vectorized : bool, optional
+        If ``True`` (default), use the fused GPU path. If ``False``, use
+        the reference Python per-env loop (for tests / debugging).
 
     Returns
     -------
@@ -348,7 +370,6 @@ def compute_knn_diversity_per_env(
         equal to the arithmetic mean of per-env Graph-SND values.
     """
     B = positions.shape[0]
-    n_agents = positions.shape[1]
 
     # Cheap Monte Carlo downsample of envs to keep kernel-launch count
     # bounded (see docstring). At small B (e.g. n_envs in evaluation,
@@ -363,8 +384,13 @@ def compute_knn_diversity_per_env(
         agent_actions = [a.index_select(0, idx.to(a.device)) for a in agent_actions]
         B = positions.shape[0]
 
-    snd_vals: List[torch.Tensor] = []
+    if use_vectorized:
+        return _compute_knn_diversity_per_env_vectorized(
+            agent_actions, positions, k, just_mean=just_mean
+        )
 
+    # Reference Python path (kept for tests/debugging).
+    snd_vals: List[torch.Tensor] = []
     for b in range(B):
         edges = compute_knn_edges(positions[b], k)
         env_actions = [a[b] for a in agent_actions]
@@ -380,6 +406,88 @@ def compute_knn_diversity_per_env(
     return torch.stack(snd_vals).mean()
 
 
+def _compute_knn_diversity_per_env_vectorized(
+    agent_actions: List[torch.Tensor],
+    positions: torch.Tensor,
+    k: int,
+    just_mean: bool = True,
+) -> torch.Tensor:
+    """Fully vectorised per-env k-NN Graph-SND (see docstring of
+    :func:`compute_knn_diversity_per_env` for the semantic contract).
+
+    Runs every step of the k-NN + Wasserstein computation as a fused
+    sequence of bulk tensor ops on the input device, so a single call
+    issues O(10) kernel launches regardless of ``B``. This keeps the
+    SND estimate from dominating IPPO training time (the Python path
+    bottlenecks at ~200 s/iter on Dispersion at ``B = 4096``).
+    """
+    B = positions.shape[0]
+    n_agents_pos = positions.shape[1]
+    P = len(agent_actions)
+    # agent_actions[i] is shape [B, N, D] where N is the obs-agent axis and
+    # D is the per-agent policy output width.
+    N = agent_actions[0].shape[-2]
+    D = agent_actions[0].shape[-1]
+
+    # k-NN needs at least one valid (non-self) neighbour per agent. With
+    # n_agents <= k the per-env k-NN is undefined; fall back to the
+    # complete graph (mean over all ordered pairs) on the action tensor.
+    # This matches the ``compute_knn_edges`` n <= k fallback.
+    k_eff = min(int(k), n_agents_pos - 1)
+    if k_eff < 1 or n_agents_pos <= k_eff:
+        # Full SND over all agent pairs.
+        return compute_behavioral_distance(agent_actions, just_mean=just_mean).mean()
+
+    # Stack agent_actions into [P, B, N, D] -> [B, P, N, D] so gather
+    # along the policy-agent axis is contiguous.
+    A = torch.stack(agent_actions, dim=0).permute(1, 0, 2, 3).contiguous()
+    # A[b, pi, :, :] = policy agent pi's output at env b (over all N obs agents).
+
+    # Pairwise spatial distances per env: [B, n_agents_pos, n_agents_pos].
+    # Mask the diagonal so an agent can't be its own neighbour.
+    # ``positions`` may live on CPU (the caller does a .cpu() for the old
+    # Python path); bring it onto the action device here so cdist + topk
+    # stay on GPU.
+    positions_dev = positions.to(A.device, non_blocking=True)
+    dist = torch.cdist(positions_dev, positions_dev)
+    eye = torch.eye(n_agents_pos, device=A.device, dtype=torch.bool)
+    dist = dist.masked_fill(eye, float("inf"))
+
+    # Top-k nearest neighbour indices: [B, n_agents_pos, k_eff].
+    _, nbr_idx = torch.topk(dist, k=k_eff, dim=-1, largest=False)
+
+    # Gather A_perm along the policy-agent axis using the neighbour
+    # indices: tgt[b, pi, kk, :, :] = A[b, nbr_idx[b, pi, kk], :, :].
+    # torch.gather requires the index tensor to match the source shape
+    # except along the gather dim; expand over (N, D).
+    idx_exp = (
+        nbr_idx.reshape(B, n_agents_pos * k_eff)
+        .unsqueeze(-1)
+        .unsqueeze(-1)
+        .expand(B, n_agents_pos * k_eff, N, D)
+    )
+    tgt = A.gather(dim=1, index=idx_exp).reshape(B, n_agents_pos, k_eff, N, D)
+    src = A.unsqueeze(2)  # [B, P, 1, N, D], broadcasts against tgt
+
+    if just_mean:
+        # Wasserstein (means only) = L2 norm of the mean diff over the
+        # output-dim axis; see het_control.snd.wasserstein_distance.
+        diff = src - tgt
+        w = torch.linalg.norm(diff, ord=2, dim=-1)  # [B, P, k_eff, N]
+        return w.mean()
+
+    # Non-just_mean path: interpret the last dim as (loc, scale) and use
+    # the Gaussian Wasserstein closed form (diagonal covariance).
+    loc_src, scale_src = src.chunk(2, dim=-1)
+    loc_tgt, scale_tgt = tgt.chunk(2, dim=-1)
+    loc_diff = torch.linalg.norm(loc_src - loc_tgt, ord=2, dim=-1)
+    # For a diagonal covariance, the Bures/Fr\xe9chet term reduces to the
+    # L2 distance between the scale vectors (elementwise std).
+    scale_diff = torch.linalg.norm(scale_src - scale_tgt, ord=2, dim=-1)
+    w = torch.sqrt(loc_diff.pow(2) + scale_diff.pow(2))
+    return w.mean()
+
+
 def compute_diversity(
     agent_actions: List[torch.Tensor],
     *,
@@ -390,6 +498,7 @@ def compute_diversity(
     knn_k: int = 3,
     knn_positions: Optional[torch.Tensor] = None,
     knn_subsample_envs: Optional[int] = 128,
+    knn_use_vectorized: bool = True,
 ) -> torch.Tensor:
     """Dispatch to the full-SND path or a Graph-SND path based on ``estimator``.
 
@@ -460,6 +569,7 @@ def compute_diversity(
             just_mean=just_mean,
             subsample_envs=knn_subsample_envs,
             subsample_rng=rng,
+            use_vectorized=knn_use_vectorized,
         )
 
     if estimator not in VALID_ESTIMATORS:
