@@ -8,9 +8,9 @@ provided for the same estimator).
 Usage:
     python scripts/plot_reward_curves.py \
         ippo:outputs/ippo/graph_snd_log.csv \
-        full:outputs/full/graph_snd_log.csv \
         knn:outputs/knn/graph_snd_log.csv \
-        --output figures/reward_curves.pdf
+        full:outputs/full/graph_snd_log.csv \
+        --output Paper/figures/neurips_knn_plot.pdf
 
     # Multiple seeds per estimator:
     python scripts/plot_reward_curves.py \
@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -40,10 +39,11 @@ except ImportError:
 
 
 LABEL_MAP = {
-    "full": "Full SND (Global DiCo)",
+    "ippo": "IPPO Baseline",
+    "full": "Full SND",
     "graph_p01": r"Graph-SND $p{=}0.1$",
     "graph_p025": r"Graph-SND $p{=}0.25$",
-    "knn": r"Graph-SND $k$-NN ($k{=}3$)",
+    "knn": "k-NN Graph-SND",
 }
 
 
@@ -140,9 +140,9 @@ def main() -> None:
             )
 
     ax.set_xlabel("Iteration")
-    ax.set_ylabel("Mean Reward")
+    ax.set_ylabel("Mean reward (per step)")
     ax.legend(loc="best", fontsize=9)
-    ax.set_title("VMAS Dispersion: mean reward vs.\ iteration")
+    ax.set_title("VMAS Dispersion: mean reward vs. iteration")
     fig.tight_layout()
 
     out = Path(args.output)
