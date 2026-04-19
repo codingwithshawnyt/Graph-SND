@@ -45,7 +45,20 @@ scale_mapping: null
 #   full       - original SND over all C(n, 2) agent pairs (unchanged DiCo behavior)
 #   graph_p01  - uniform-weight Graph-SND on a Bernoulli(p=0.1) random subgraph
 #   graph_p025 - uniform-weight Graph-SND on a Bernoulli(p=0.25) random subgraph
+#   knn        - uniform-weight Graph-SND on a dynamic per-env k-NN spatial graph
 diversity_estimator: full
 # Bernoulli inclusion probability for the Graph-SND path. Ignored when
-# diversity_estimator == full.
+# diversity_estimator in {full, knn}.
 diversity_p: 1.0
+# Number of nearest neighbours per agent for the dynamic k-NN graph. Only used
+# when diversity_estimator == knn.
+diversity_knn_k: 3
+# Per-call cap on the number of parallel envs used when estimating the k-NN
+# Graph-SND scalar. At IPPO minibatch size 4096 the naive per-env loop in
+# ``compute_knn_diversity_per_env`` launches ~120k tiny CUDA kernels per call
+# (O(B * n_agents * k)); at ~675 training forwards/iter that is ~81M launches
+# and training effectively hangs. Capping at 128 uniformly samples a Monte
+# Carlo population of envs per call, giving an unbiased estimator of the same
+# scalar at ~30x lower kernel-launch cost. Override on the CLI with
+# ``model.diversity_knn_subsample_envs=<int>``; set to 0 to disable.
+diversity_knn_subsample_envs: 128

@@ -49,6 +49,12 @@ N_AGENTS="${N_AGENTS:-10}"
 MAX_ITERS="${MAX_ITERS:-167}"
 DESIRED_SND="${DESIRED_SND:-0.1}"
 N_FOOD="${N_FOOD:-${N_AGENTS}}"
+# Monte Carlo cap on envs used to estimate k-NN Graph-SND per forward. At
+# IPPO minibatch size 4096 the naive per-env loop launches ~120k tiny CUDA
+# kernels per estimate_snd call (~81M/iter), which hangs training. 128 is
+# an unbiased subsample that runs fast enough to finish. Bump to 256 or
+# set to 0 (disable) only if you explicitly want the uncapped cost.
+KNN_SUBSAMPLE_ENVS="${KNN_SUBSAMPLE_ENVS:-128}"
 FORCE="${FORCE:-0}"
 LOGGERS='experiment.loggers=[]'
 
@@ -95,13 +101,14 @@ CUDA_VISIBLE_DEVICES=0 nohup "${RUNNER[@]}" \
 PID_A=$!
 
 # --- Run C: k-NN Graph-SND DiCo (k=3, desired_snd=0.1) on GPU 1 ---
-echo "[$(date -Is)] Starting k-NN Graph-SND (k=3) on physical GPU 1 -> ${KNN_DIR}"
+echo "[$(date -Is)] Starting k-NN Graph-SND (k=3, subsample_envs=${KNN_SUBSAMPLE_ENVS}) on physical GPU 1 -> ${KNN_DIR}"
 CUDA_VISIBLE_DEVICES=1 nohup "${RUNNER[@]}" \
     --config-name dispersion_ippo_knn_config \
     "${HYDRA_COMMON[@]}" \
     "model.desired_snd=${DESIRED_SND}" \
     "model.diversity_estimator=knn" \
     "model.diversity_knn_k=3" \
+    "model.diversity_knn_subsample_envs=${KNN_SUBSAMPLE_ENVS}" \
     "hydra.run.dir=${KNN_DIR}" \
     > "logs/neurips_final_knn.log" 2>&1 &
 PID_C=$!

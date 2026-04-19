@@ -300,6 +300,8 @@ def compute_knn_diversity_per_env(
     positions: torch.Tensor,
     k: int,
     just_mean: bool = True,
+    subsample_envs: Optional[int] = 128,
+    subsample_rng: Optional[torch.Generator] = None,
 ) -> torch.Tensor:
     """Per-env k-NN Graph-SND: compute a *different* k-NN graph for each
     parallel environment in the batch, then average the per-env diversity
@@ -309,6 +311,14 @@ def compute_knn_diversity_per_env(
     batches.  Agents' spatial layouts differ across parallel environments,
     so a single k-NN graph computed from one environment snapshot would
     impose wrong neighbourhood structure on the rest.
+
+    For large batches the per-env loop becomes a hot path: every env
+    triggers ``k * n_agents`` tiny pairwise-Wasserstein kernel launches,
+    so at ``B = 4096`` (a typical IPPO minibatch) a single call issues
+    order-of-100k CUDA launches. ``subsample_envs`` caps ``B`` by
+    uniformly sampling at most that many envs per call, giving an
+    unbiased Monte Carlo estimate of the same population scalar at a
+    fraction of the kernel-launch cost. Set to ``None`` to disable.
 
     Parameters
     ----------
@@ -321,6 +331,15 @@ def compute_knn_diversity_per_env(
         Number of nearest neighbours per agent.
     just_mean : bool
         Forwarded to :func:`compute_graph_snd_uniform`.
+    subsample_envs : int or None, optional
+        If set and ``B > subsample_envs``, uniformly sample this many env
+        indices without replacement before the per-env loop. Defaults to
+        ``128``. ``None`` disables subsampling (restores the original
+        behaviour; only use for small ``B``).
+    subsample_rng : torch.Generator, optional
+        RNG used for the env subsample draw (reproducibility). Defaults
+        to a fresh CPU generator seeded by :func:`torch.randperm`'s
+        default behaviour when omitted.
 
     Returns
     -------
@@ -330,6 +349,20 @@ def compute_knn_diversity_per_env(
     """
     B = positions.shape[0]
     n_agents = positions.shape[1]
+
+    # Cheap Monte Carlo downsample of envs to keep kernel-launch count
+    # bounded (see docstring). At small B (e.g. n_envs in evaluation,
+    # tests) the default is effectively a no-op.
+    if subsample_envs is not None and B > subsample_envs:
+        if subsample_rng is None:
+            idx = torch.randperm(B, device=positions.device)[:subsample_envs]
+        else:
+            idx = torch.randperm(B, generator=subsample_rng)[:subsample_envs]
+            idx = idx.to(positions.device)
+        positions = positions.index_select(0, idx)
+        agent_actions = [a.index_select(0, idx.to(a.device)) for a in agent_actions]
+        B = positions.shape[0]
+
     snd_vals: List[torch.Tensor] = []
 
     for b in range(B):
@@ -356,6 +389,7 @@ def compute_diversity(
     just_mean: bool = True,
     knn_k: int = 3,
     knn_positions: Optional[torch.Tensor] = None,
+    knn_subsample_envs: Optional[int] = 128,
 ) -> torch.Tensor:
     """Dispatch to the full-SND path or a Graph-SND path based on ``estimator``.
 
@@ -420,7 +454,12 @@ def compute_diversity(
         if knn_positions.dim() == 2:
             knn_positions = knn_positions.unsqueeze(0)
         return compute_knn_diversity_per_env(
-            agent_actions, knn_positions, knn_k, just_mean=just_mean
+            agent_actions,
+            knn_positions,
+            knn_k,
+            just_mean=just_mean,
+            subsample_envs=knn_subsample_envs,
+            subsample_rng=rng,
         )
 
     if estimator not in VALID_ESTIMATORS:

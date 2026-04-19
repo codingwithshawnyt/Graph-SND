@@ -35,6 +35,7 @@ class HetControlMlpEmpirical(Model):
         diversity_estimator: str = "full",
         diversity_p: float = 1.0,
         diversity_knn_k: int = 3,
+        diversity_knn_subsample_envs: int = 128,
         **kwargs,
     ):
         """DiCo policy model
@@ -60,6 +61,13 @@ class HetControlMlpEmpirical(Model):
             Ignored when ``diversity_estimator in {"full", "knn"}``.
             diversity_knn_k (int): Number of nearest neighbours for the k-NN graph. Only used
             when ``diversity_estimator == "knn"``. Defaults to 3.
+            diversity_knn_subsample_envs (int): Per-call cap on the number of parallel envs
+            used to estimate the k-NN Graph-SND scalar. At IPPO minibatch size 4096 the
+            naive per-env loop launches ~120k tiny CUDA kernels per ``estimate_snd`` call
+            (~81M/iter), which hangs training in practice. Capping the Monte Carlo
+            population at 128 gives an unbiased estimator at a tiny fraction of the cost.
+            Set to 0 or a negative value to disable subsampling. Only used when
+            ``diversity_estimator == "knn"``. Defaults to 128.
         """
 
         super().__init__(**kwargs)
@@ -74,6 +82,10 @@ class HetControlMlpEmpirical(Model):
         self.diversity_estimator = diversity_estimator
         self.diversity_p = float(diversity_p)
         self.diversity_knn_k = int(diversity_knn_k)
+        # Non-positive values disable the Monte Carlo cap (restores the original
+        # O(B) per-env k-NN loop; only safe for tiny B, e.g. evaluation/tests).
+        _sub = int(diversity_knn_subsample_envs)
+        self.diversity_knn_subsample_envs = _sub if _sub > 0 else None
         # Bernoulli RNG lives in ``het_control.graph_snd.get_graph_rng(self)`` (weak-key
         # registry), not on this module, so TorchRL can ``deepcopy`` the actor for
         # PPO loss. GraphSNDLoggingCallback reseeds via ``reseed_graph_rng`` each iter.
@@ -386,6 +398,7 @@ class HetControlMlpEmpirical(Model):
             just_mean=True,
             knn_k=self.diversity_knn_k,
             knn_positions=knn_positions,
+            knn_subsample_envs=self.diversity_knn_subsample_envs,
         ) # Compute the SND of these unscaled policies (scalar tensor)
         distance = distance_scalar.unsqueeze(-1)
         if self.estimated_snd.isnan().any():  # First iteration
@@ -414,6 +427,7 @@ class HetControlMlpEmpiricalConfig(ModelConfig):
     diversity_estimator: str = "full"
     diversity_p: float = 1.0
     diversity_knn_k: int = 3
+    diversity_knn_subsample_envs: int = 128
 
     @staticmethod
     def associated_class():
