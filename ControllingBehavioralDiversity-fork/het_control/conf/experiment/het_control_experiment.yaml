@@ -6,6 +6,10 @@ defaults:
 sampling_device: "cuda"
 # The device for training (e.g. cuda)
 train_device: "cuda"
+# Replay buffer for off-policy algorithms (BenchMARL >=1.5 ExperimentConfig)
+buffer_device: "cpu"
+collect_with_grad: False
+parallel_collection: False
 
 # Whether to share the parameters of the policy within agent groups
 share_policy_params: True # This won't matter as our model ignores it
@@ -22,6 +26,7 @@ clip_grad_norm: True
 clip_grad_val: 5
 ## The epsilon parameter of the adam optimizer
 adam_eps: 0.00001
+adam_extra_kwargs: {}
 
 # Whether to use soft or hard target updates
 soft_target_update: True
@@ -69,6 +74,9 @@ off_policy_train_batch_size: 128
 off_policy_memory_size: 1_000_000
 # Number of random action frames to prefill the replay buffer with
 off_policy_init_random_frames: 0
+off_policy_use_prioritized_replay_buffer: False
+off_policy_prb_alpha: 0.6
+off_policy_prb_beta: 0.4
 
 evaluation: True
 # Whether to render the evaluation (if rendering is available
@@ -79,18 +87,25 @@ evaluation_interval: 120_000
 evaluation_episodes: 200
 # If True, when stochastic policies are evaluated, their mode is taken, otherwise, if False, they are sampled
 evaluation_deterministic_actions: False
+evaluation_static: False
 
 # Absolute path to the folder where the experiment will log.
 # If null, this will default to the hydra output dir (if using hydra) or to the current folder when the script is run (if not).
 save_folder: null
 # Absolute path to a checkpoint file where the experiment was saved. If null the experiment is started fresh.
 restore_file: null
+restore_map_location: null
 # Interval for experiment saving in terms of collected frames (this should be a multiple of on/off_policy_collected_frames_per_batch).
 # Set it to 0 to disable checkpointing
 checkpoint_interval: 0
+checkpoint_at_end: False
+keep_checkpoints_num: 3
+exclude_buffer_from_checkpoint: False
 
 # List of loggers to use, options are: wandb, csv, tensorboard, mflow
 loggers: [wandb]
+project_name: "benchmarl"
+wandb_extra_kwargs: {}
 # Create a json folder as part of the output in the format of marl-eval
 create_json: True
 
