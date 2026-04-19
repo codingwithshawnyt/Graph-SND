@@ -191,7 +191,7 @@ class HetControlMlpEmpirical(Model):
         else:  # Gather outputs for one agent on the obs
             # tensor of shape [*batch, n_agents, n_actions], where the outputs
             # along the n_agent dimension are taken with the same (agent_index) agent network
-            agent_out = self.agent_mlps.agent_networks[agent_index].forward(input)
+            agent_out = self._apply_one_agent_net(agent_index, input)
 
         shared_out = self.process_shared_out(shared_out)
 
@@ -324,15 +324,41 @@ class HetControlMlpEmpirical(Model):
         else:
             return logits
 
+    def _apply_one_agent_net(self, agent_index: int, obs: torch.Tensor) -> torch.Tensor:
+        """Run the ``agent_index``-th per-agent MLP of ``self.agent_mlps`` on ``obs``.
+
+        In TorchRL >=0.11, :class:`MultiAgentMLP` no longer exposes an
+        ``agent_networks: ModuleList`` attribute; parameters live in
+        ``mlp.params`` (a batched :class:`~tensordict.TensorDictParams` of shape
+        ``(n_agents,)`` when ``share_params=False``) and ``mlp._empty_net`` is
+        the single meta-tensor MLP template. This replicates the old
+        ``agent_networks[agent_index](obs)`` call: temporarily bind the
+        ``agent_index``-th slice of params onto the template and run it forward.
+
+        ``obs`` has shape ``[*batch, n_agents, obs_dim]`` and the MLP
+        broadcasts over all leading dims, so the output is
+        ``[*batch, n_agents, out_dim]`` -- what the old code returned.
+        """
+        mlp = self.agent_mlps
+        if mlp.share_params:
+            agent_params = mlp.params
+        else:
+            agent_params = mlp.params[agent_index]
+        with agent_params.to_module(mlp._empty_net):
+            return mlp._empty_net(obs)
+
     # @torch.no_grad()
     def estimate_snd(self, obs: torch.Tensor):
         """
         Update \widehat{SND}
         """
         agent_actions = []
-        # Gather what actions each agent would take if given the obs tensor
-        for agent_net in self.agent_mlps.agent_networks:
-            agent_outputs = agent_net(obs)
+        # Gather what actions each agent would take if given the obs tensor.
+        # Iterate per-agent indices rather than relying on an ``agent_networks``
+        # attribute (removed in TorchRL >=0.11; see ``_apply_one_agent_net``).
+        n_agent_nets = 1 if self.agent_mlps.share_params else self.n_agents
+        for agent_i in range(n_agent_nets):
+            agent_outputs = self._apply_one_agent_net(agent_i, obs)
             agent_actions.append(agent_outputs)
 
         # Build per-env k-NN positions when the knn estimator is active.
