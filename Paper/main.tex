@@ -1,0 +1,1327 @@
+\documentclass[11pt]{article}
+
+% ---------- Core packages ----------
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage{natbib}
+
+
+% ---------- Theorem environments ----------
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% ---------- Notation macros ----------
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\Agents}{\mathcal{A}}        % agent set
+\newcommand{\Normal}{\mathcal{N}}        % Gaussian distribution
+\newcommand{\Obs}{\mathcal{O}}           % observation space
+\newcommand{\Rollouts}{\mathcal{B}}      % rollout observation set
+\newcommand{\Pairs}{\mathcal{P}}         % set of unordered pairs
+\newcommand{\policy}[1]{\pi_{\theta_{#1}}}
+\newcommand{\Wass}{W_2}
+\newcommand{\SND}{\ensuremath{\mathrm{SND}}}
+\newcommand{\SNDG}{\mathrm{SND}_{G}}
+\newcommand{\HSE}{\mathrm{HSE}}
+\newcommand{\abs}[1]{\left\lvert #1 \right\rvert}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\ind}{\mathbf{1}}
+
+% ---------- Title ----------
+\title{Scalable System Neural Diversity:\\
+Graph-Based Local Aggregation and Sampling-Based Estimation}
+
+\author{Shawn R.\\
+\textit{Carnegie Mellon University}\\
+\texttt{shawnray@cmu.edu}}
+
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+System Neural Diversity (SND) quantifies behavioral heterogeneity in
+multi-agent reinforcement learning by averaging pairwise Wasserstein distances
+over all $\binom{n}{2}$ agent pairs, scaling as $O(n^2)$; sparse-graph
+generalizations are identified as an open problem by the original authors.
+We introduce Graph-SND, a graph-structured generalization that computes
+pairwise distances only on the edges of a user-specified graph $G$ and
+aggregates via a normalized weighted mean. The construction recovers SND
+exactly when $G$ is the complete graph and admits two interpretations
+determined by the choice of $G$. When $G$ is fixed and encodes task-relevant
+interaction structure, Graph-SND is a localized diversity measure, reducing
+distance evaluations from $O(n^2)$ to $O(|E|)$. When edges are drawn
+independently with Horvitz--Thompson weights, Graph-SND is an unbiased
+estimator of full SND, with a Hoeffding-type concentration bound yielding
+$O(1/\sqrt{m})$ error in the number of sampled edges $m$, independent of $n$.
+We prove six formal properties, recovery, non-negativity,
+graph-automorphism invariance, complexity reduction, unbiasedness, and
+concentration, and verify all experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$. Recovery is numerically exact, the estimator is unbiased to within expected sampling noise, concentration bounds hold with zero violations across 24{,}000 draws, and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio, sustaining a ${\sim}\!10\times$ speedup during active PPO training at $n=100$, with the sampling estimator tracking full $\SND$ indistinguishably throughout.
+\end{abstract}
+% ============================================================
+\section{Introduction}
+\label{sec:intro}
+
+Behavioral diversity is increasingly recognized as a first-class
+property of multi-agent reinforcement learning systems, not merely a
+by-product of heterogeneous parameterization. Heterogeneous policies
+can specialize into complementary roles, remain robust under
+observation noise and dynamic disturbances, and expose latent
+resilience skills that are invisible in reward curves alone
+\citep{bettini2023hetgppo, bettini2025snd}. System Neural Diversity
+(SND), introduced by \citet{bettini2025snd}, is the current
+statistical metric of this heterogeneity for continuous-action
+stochastic policies. SND defines a pairwise Wasserstein distance
+between agents' action distributions, averages over a Monte Carlo
+rollout set, and aggregates into a global score by taking the mean of
+pairwise distances over all unique agent pairs. The metric is
+closed-form for Gaussian policies, satisfies the axioms of a
+mathematical metric, and enables explicit control of diversity during
+training via the DiCo paradigm \citep{bettini2024dico}.
+
+We extend SND along a specific axis that its authors explicitly flag
+as open.
+\citet[\S 6]{bettini2025snd}
+note that SND scales quadratically in the number of agents: evaluating
+it requires computing pairwise Wasserstein distances for every one of
+the $\binom{n}{2}$ agent pairs at every rollout batch on which
+diversity is to be measured or controlled. They further observe that
+in large multi-agent systems only locally interacting agents are
+typically relevant, and they suggest computing SND only within
+subgroups; they then identify \emph{aggregating subgroup values into a
+global diversity value} as an open problem. To our knowledge, no
+subsequent work has resolved this question.
+
+This paper addresses the gap directly. We define Graph-SND, a
+graph-structured generalization that computes pairwise behavioral
+distances only on the edges of a user-specified graph $G$ over agents,
+and aggregates those distances via a normalized weighted mean. The
+construction is minimal by design: it extends rather than replaces
+SND, recovers SND exactly when $G$ is complete, and admits two clean
+interpretations distinguished entirely by the choice of $G$.
+
+When $G$ is fixed and encodes task-relevant interaction structure
+(e.g., the communication graph, $k$-nearest neighbors in observation
+space, or a user-provided prior), Graph-SND is a \emph{localized
+diversity measure}: it quantifies the heterogeneity among pairs of
+agents that actually interact, and ignores pairs that do not. This
+choice makes the metric cheaper to compute and aligns its semantics
+with the coordination structure of the task. It is also semantically
+strictly weaker than SND, and we are explicit about where that matters
+(Remark~\ref{rem:semantics}).
+
+When $G$ is random, specifically, when each pair is independently
+included in $E$ with probability $p$, Graph-SND is an unbiased
+\emph{sampling estimator} of full SND. With Horvitz--Thompson weights,
+it has expectation exactly $\SND$, and standard Hoeffding-type
+concentration applies after conditioning on the sampled edge count.
+This gives an $O(1/\sqrt{m})$ error bound in the number of sampled edges $m$, independent of the number of agents, so $\SND$ can be
+approximated to target precision $\varepsilon$ using
+$O(\varepsilon^{-2} \log(1/\delta))$ distance evaluations.
+
+Our contributions are:
+\begin{enumerate}
+\item A graph-structured generalization $\SNDG$
+  (Definition~\ref{def:graph-snd}) that subsumes $\SND$ on the
+  complete graph and supports both fixed and random $G$.
+\item Two operational interpretations of $\SNDG$ selected by $G$: a
+  localized diversity measure (fixed $G$) and a sampling estimator of
+  $\SND$ (random $G$ with Horvitz--Thompson weights).
+\item Six formal results (Section~\ref{sec:theory}): recovery of
+  $\SND$ on $K_n$, non-negativity with zero condition,
+  graph-automorphism invariance, a complexity statement counting
+  pairwise-distance evaluations, unbiasedness of the Horvitz--Thompson
+  estimator, and a Hoeffding-type concentration bound. Proofs appear
+  in Appendix~\ref{app:proofs}.
+\item A subgraph-based hierarchical aggregation
+  (Section~\ref{sec:method:hierarchical}) that avoids any commitment
+  to Wasserstein barycenters in policy space.
+\item Experiments on VMAS \citep{bettini2022vmas} verifying (i) that
+  Graph-SND on $K_n$ reproduces $\SND$ numerically, (ii) that the sampling estimator concentrates around $\SND$ at the bound predicted by
+Theorem~\ref{thm:concentration}, and (iii) that sparse Graph-SND
+  preserves the measurement and diagnostic uses of $\SND$ at
+  substantially reduced cost.
+\end{enumerate}
+
+The construction is deliberately narrow. We do not propose a new
+training algorithm, a new policy architecture, or a new
+diversity-inducing objective. We propose a drop-in replacement for the
+aggregation step of SND that is cheaper to compute at scale and that
+retains the properties of SND that matter for how the metric is used
+in practice.
+
+% ============================================================
+\section{Related Work}
+\label{sec:related}
+
+Our work sits at the intersection of three lines of research:
+diversity measures in multi-agent reinforcement learning,
+heterogeneity measures in robotics, and sampling-based approximations
+of pairwise statistics. We discuss each in turn and position Graph-SND
+against the closest prior work.
+
+\subsection{Diversity measures in multi-agent RL}
+
+Several prior metrics quantify behavioral diversity among learned
+policies. \citet{mckee2022diversity} approximate policy distributions
+from sampled discrete actions and measure divergence via total
+variation; \citet{yu2021informative} similarly rely on empirically
+estimated distributions using either KL divergence or Wasserstein on
+sampled actions. Both methods introduce sampling error in the
+distribution estimation step itself, before any diversity computation.
+\citet{hu2022policy} use symmetric KL between discrete action
+distributions, which does not satisfy the triangle inequality and is
+therefore not a statistical metric. \citet{liu2021unifying} use
+$f$-divergence between occupancy measures, yielding a principled
+formulation that is computationally intractable beyond zero-sum games.
+\citet{parker-holder2020effective} define population diversity as a
+determinant of a behavioral distance matrix over deterministic actions
+sampled at random states, which can evaluate policies far from their
+training support. \citet{lupu2021trajedi} measure Jensen--Shannon
+divergence between trajectory distributions for zero-shot coordination
+in population-based training.
+
+SND \citep{bettini2025snd} is distinguished from these by being
+closed-form on Gaussian continuous-action policies, satisfying the
+axioms of a statistical metric, applying to concurrently acting
+teams (rather than populations), and providing formal properties that
+enable interpretation as behavioral dispersion and measurement of
+redundancy. Every prior metric in this list, and SND itself,
+aggregates pairwise statistics by averaging uniformly over all
+$\binom{n}{2}$ pairs. Our contribution sits at this aggregation step:
+Graph-SND generalizes the uniform average to an arbitrary weighted
+mean over the edges of a graph, while preserving the closed-form
+Wasserstein behavioral distance of SND. All results in this paper
+apply directly to the SND setting; they would apply to other
+pairwise-distance-based metrics with straightforward modifications.
+
+\subsection{Heterogeneity measures in robotics}
+
+Heterogeneity has a separate history in the robotics literature, where
+it often reflects differences in physical capability rather than
+policy. \citet{prorok2017impact} formalize robot-swarm heterogeneity
+through a species-trait matrix; their analysis targets physical
+diversity, which does not always coincide with behavioral diversity
+\citep{stanley2019designing}. \citet{li2004learning} propose a
+specialization metric obtained via correlation with team performance,
+which is an indirect proxy for behavior. \citet{twu2014measure} define
+a computation-light metric assuming a fixed number of diversity
+classes.
+
+The closest behavioral-space metric is Hierarchic Social Entropy
+(HSE) \citep{balch2000hse}, which applies Shannon entropy to a
+distribution of agents over hierarchical behavioral clusters. HSE is
+deterministic-policy-based and complementary to SND:
+\citet{bettini2025snd} show that HSE grows with the number of
+equidistant agents and does not capture redundancy, whereas SND is
+invariant to the former and decreasing in the latter. Graph-SND
+inherits SND's properties on the complete graph and modifies them
+predictably on sparser graphs; we leave a parallel study of
+HSE-on-a-graph to future work.
+
+\subsection{Graph structure in multi-agent learning}
+
+Graphs are a pervasive modeling device in multi-agent RL, primarily as
+communication topologies or message-passing substrates for policy
+networks \citep{sukhbaatar2016learning, blumenkamp2021emergence,
+bettini2023hetgppo}. They are also used as inductive biases for
+credit assignment, role assignment, and attention mechanisms
+\citep{wang2020roma, wang2021rode}. Our use of a graph is different:
+we do not couple $G$ to the policy or value function. The graph enters
+only at the aggregation stage of a diversity measure, as a
+specification of which agent pairs contribute to the score.
+
+This decoupling makes $G$ in our formulation compatible with, but
+not dependent on, any graph-based policy architecture. When a
+communication graph is already available from a GNN-based policy, it
+is a natural choice for $G$, and Graph-SND then measures diversity
+that is consistent with the interaction structure used by the policy
+itself. When no such graph exists, $G$ can be constructed from
+spatial or behavioral proximity, or sampled for the purpose of
+estimation.
+
+\subsection{Sampling-based approximations and finite-population
+concentration}
+
+Our second interpretation, Graph-SND with randomly included edges
+as a sampling estimator of $\SND$, draws on standard tools from
+survey sampling and concentration inequalities. The Horvitz--Thompson
+estimator \citep{horvitz1952generalization} is the textbook device for
+unbiased estimation under arbitrary inclusion probabilities, and our
+unbiasedness result (Proposition~\ref{prop:unbiased}) is a direct
+application.
+
+For concentration, we rely on Hoeffding's extension of his inequality
+to sampling without replacement from a bounded finite population
+\citep[\S 6]{hoeffding1963probability}. Sharper finite-population
+bounds are available: \citet{serfling1974probability} introduces a
+correction factor that improves the constant when the sampling
+fraction is bounded away from zero, and
+\citet{bardenet2015concentration} extend this to Bernstein-type and
+empirical bounds. We state
+Theorem~\ref{thm:concentration} in Hoeffding form for clarity and note
+these sharpenings in Remark~\ref{rem:serfling}. The sampling-estimator
+framing of a sum over all $\binom{n}{2}$ pairs is standard in
+$U$-statistics \citep{hoeffding1948class} and has been formalized for
+sampling without replacement by \citet{hoeffding1963probability}
+and more recently extended to $U$-statistics without replacement in
+broader settings. We use only the elementary one-dimensional version;
+the link is worth flagging for readers who want sharper rates.
+
+\subsection{Follow-up work on SND}
+
+Since the introduction of SND, \citet{bettini2024dico} have used it as
+a control target (DiCo), regularizing training to a prescribed
+diversity set-point. \citet{amir2025diversity} study \emph{when}
+diversity is beneficial, analyzing curvature properties of cooperative
+reward functions. Neither line addresses the scalability of SND
+itself. Graph-SND is orthogonal and compositional with both: DiCo can
+be instantiated on Graph-SND as a sparse target, and
+the conditions for when diversity is rewarded apply independently of
+how the diversity metric is aggregated.
+
+% ============================================================
+\section{Background}
+\label{sec:background}
+
+\subsection{Partially Observable Markov Games}
+\label{sec:background:pomg}
+
+We consider cooperative multi-agent settings formalized as Partially
+Observable Markov Games (POMGs)~\citep{kaelbling1998planning}. A POMG
+is a tuple
+\[
+\bigl\langle \Agents,\; \mathcal{S},\; \{\Obs_i\}_{i \in \Agents},\;
+\{\sigma_i\}_{i \in \Agents},\; \{\mathcal{A}_i\}_{i \in \Agents},\;
+\{R_i\}_{i \in \Agents},\; \mathcal{T},\; \gamma \bigr\rangle,
+\]
+where $\Agents = \{1, \dots, n\}$ is the set of agents, $\mathcal{S}$
+is the shared state space, and $\Obs_i \subseteq \mathcal{S}$ and
+$\mathcal{A}_i$ are the observation and action spaces of agent $i$.
+The observation function $\sigma_i : \mathcal{S} \to \Obs_i$ maps
+states to agent-$i$ observations, and the reward function
+$R_i : \mathcal{S} \times \prod_{j \in \Agents} \mathcal{A}_j \times
+\mathcal{S} \to \R$ is shared or individual as the task dictates. The
+stochastic transition model $\mathcal{T} : \mathcal{S} \times
+\prod_{j \in \Agents} \mathcal{A}_j \times \mathcal{S} \to [0, 1]$
+assigns transition probabilities $\mathcal{T}(s^t, \{a_i^t\}_{i \in
+\Agents}, s^{t+1})$ given the current state and joint action, and
+$\gamma \in [0, 1)$ is the discount factor.
+
+Each agent $i$ has a stochastic policy $\policy{i}(a_i \mid o_i)$
+parameterized by $\theta_i$ that maps observations to action
+distributions. We work in the heterogeneous-policy regime: agents do
+not share parameters, so $\theta_i \neq \theta_j$ is permitted for
+$i \neq j$. This is the setting in which the question of behavioral
+diversity is well-posed, since parameter-sharing constraints force
+$d(i, j) = 0$ by construction and collapse the metrics we study to
+the trivial value. Agents are trained with any algorithm that supports
+per-agent policy parameterization, for example,
+(Het)IPPO or (Het)GPPO~\citep{bettini2023hetgppo}, and the metrics
+in this paper are computed on the resulting learned policies
+\emph{post hoc} on rollout data.
+
+Because we compare behavioral distances between policies, we assume
+throughout that all agents share observation and action spaces:
+$\Obs_i = \Obs$ and $\mathcal{A}_i = \mathcal{A}$ for all
+$i \in \Agents$. This ensures that $\policy{i}(\cdot \mid o)$ and
+$\policy{j}(\cdot \mid o)$ are distributions over the same space and
+can be compared pointwise in $o$. Extensions to heterogeneous
+observation or action spaces require an alignment construction and
+are out of scope.
+
+\subsection{System Neural Diversity}
+Following \citet{bettini2025snd}, let $\Agents = \{1, \dots, n\}$ be the
+agent set and let each agent $i \in \Agents$ have a Gaussian policy
+$\policy{i}(o) = \Normal\bigl(\mu_{\theta_i}(o),\, \Sigma_{\theta_i}(o)\bigr)$.
+Let $\Rollouts = \{o^t\}_{t=1}^T$ be a collection of joint observation
+vectors sampled from policy rollouts, where each
+$o^t = (o_1^t,\dots,o_n^t) \in \Obs^n$.
+The Monte Carlo behavioral distance between agents $i$ and $j$ is
+\begin{equation}
+\label{eq:dij}
+d(i,j) \;=\; \frac{1}{|\Rollouts|\,|\Agents|}
+\sum_{o^t \in \Rollouts} \sum_{k \in \Agents}
+\Wass\bigl(\policy{i}(o^t_k),\, \policy{j}(o^t_k)\bigr),
+\end{equation}
+where $\Wass$ admits a closed form on multivariate Gaussians
+\citep{bettini2025snd}. The global System Neural Diversity is
+\begin{equation}
+\label{eq:snd}
+\SND(\mathbf{D}) \;=\; \binom{n}{2}^{-1} \sum_{i<j} d(i,j),
+\end{equation}
+the mean of pairwise behavioral distances over unique agent pairs. We work
+with~\eqref{eq:dij} directly rather than its integral form, avoiding
+specification of a measure on $\Obs$; all our results are stated at the
+level of the sampled estimator. Throughout, we treat the values
+$\{d(i,j)\}_{\{i,j\} \in \Pairs}$ as fixed (deterministic in $\mathbf{D}$),
+so that all stochasticity in the estimators below arises solely from the
+random graph.
+
+% ============================================================
+\section{Graph-SND}
+\label{sec:method}
+
+Full SND weights every pair equally. This is both computationally
+prohibitive (quadratic in $n$) and, in many settings, semantically
+imprecise: agents that do not interact or operate on disjoint sub-tasks
+contribute to the score on equal footing with coupled pairs. We introduce a
+graph-structured generalization that supports two distinct use cases: a
+localized diversity measure when $G$ encodes interaction structure, and
+sampling-based estimators of $\SND$ when edges of $G$ are drawn from the
+pair set.
+
+\subsection{Definition}
+
+Let $\Pairs := \binom{\Agents}{2}$ be the set of unordered agent pairs,
+and let $G = (\Agents, E, w)$ be an undirected graph on the agent set with
+$E \subseteq \Pairs$ and non-negative edge weights $w : E \to \R_{\geq 0}$.
+Write $W(G) = \sum_{\{i,j\} \in E} w_{ij}$ and assume $W(G) > 0$. The graph
+may be fixed (e.g., communication topology, $k$-NN on observations,
+$\varepsilon$-ball) or sampled from pairs
+(Section~\ref{sec:method:estimator}).
+
+\begin{definition}[Graph-SND]
+\label{def:graph-snd}
+The Graph-SND of policies $\{\policy{i}\}_{i \in \Agents}$ on $G$ is
+\begin{equation}
+\label{eq:graph-snd}
+\SNDG(\mathbf{D}, G) \;=\; \frac{1}{W(G)}
+\sum_{\{i,j\} \in E} w_{ij} \, d(i,j),
+\end{equation}
+with $d(i,j)$ given by~\eqref{eq:dij}.
+\end{definition}
+
+When $G = K_n$ with unit weights, $W(G) = \binom{n}{2}$ and
+$\SNDG(\mathbf{D}, K_n) = \SND(\mathbf{D})$ identically.
+
+\subsection{Canonical graph families}
+
+Three choices of $G$ recover interpretable special cases.
+\begin{itemize}
+  \item \textbf{Complete graph}, $G = K_n$, $w \equiv 1$: recovers $\SND$.
+  \item \textbf{$k$-nearest-neighbor graph} in observation space:
+  $|E| = O(nk)$, yielding a $\Theta(n/k)$ reduction in the number of
+  pairwise distance evaluations relative to full $\SND$.
+  \item \textbf{Communication graph} inherited from the policy's message-passing topology: aligns measured diversity with the interaction
+  structure actually used by the agents.
+\end{itemize}
+In each case $G$ may be fixed or state-dependent; the latter requires
+re-evaluating $\SNDG$ per rollout batch.
+
+For any weighted graph $G' = (\Agents', E', w')$ with $W(G') = 0$, we define
+\[
+\SNDG(\mathbf{D}, G') := 0
+\]
+by convention.
+
+\subsection{Hierarchical Graph-SND via subgraphs}
+\label{sec:method:hierarchical}
+
+Many multi-agent systems exhibit diversity at multiple scales. We build a
+hierarchical construction on scalar diversity values rather than on
+policies, avoiding any commitment to policy-space aggregation such as
+Wasserstein barycenters.
+
+Let $\{C_1, \dots, C_K\}$ be a partition of $\Agents$ into clusters, and
+let $G|_{C_k}$ denote the subgraph of $G$ induced on $C_k$. Define the
+within-cluster and between-cluster diversities as
+\[
+\SNDG^{\mathrm{in}} \;:=\; \frac{1}{K}\sum_{k=1}^K \SNDG\bigl(\mathbf{D}, G|_{C_k}\bigr),
+\qquad
+\SNDG^{\mathrm{btw}} \;:=\; \SNDG\bigl(\mathbf{D}, G_{\mathrm{cut}}\bigr),
+\]
+where $G_{\mathrm{cut}}$ contains only the inter-cluster edges of $G$. A
+two-level aggregate is
+\begin{equation}
+\label{eq:hsnd}
+\SNDG^h \;=\; \alpha\, \SNDG^{\mathrm{in}} + (1-\alpha)\, \SNDG^{\mathrm{btw}},
+\qquad \alpha \in [0,1],
+\end{equation}
+which generalizes to multiple levels by recursive partitioning.
+
+% ============================================================
+\section{Theoretical Properties}
+\label{sec:theory}
+
+We state Graph-SND's core properties, then give a probabilistic
+interpretation as sampling-based estimators of $\SND$ with concentration
+guarantees. Proofs are in Appendix~\ref{app:proofs}.
+
+\subsection{Core properties}
+
+\begin{proposition}[Recovery on the complete graph]
+\label{prop:recovery}
+If $G = K_n$ with unit edge weights, then
+$\SNDG(\mathbf{D}, G) = \SND(\mathbf{D})$.
+\end{proposition}
+
+\begin{proposition}[Non-negativity]
+\label{prop:nonneg}
+$\SNDG(\mathbf{D}, G) \geq 0$, with equality if and only if $d(i,j) = 0$
+for every edge $\{i,j\} \in E$ with $w_{ij} > 0$.
+\end{proposition}
+
+\begin{remark}[Semantic shift from $\SND$]
+\label{rem:semantics}
+Proposition~\ref{prop:nonneg} is strictly weaker than the zero condition
+of full $\SND$: $\SNDG$ can vanish even when the system contains
+behaviorally distinct agents, provided those agents are not adjacent in
+$G$. When $G$ encodes task-relevant interaction structure, this is the
+intended semantics: Graph-SND measures \emph{locally relevant}
+diversity. When full-system diversity is the target, the estimator
+interpretation of Section~\ref{sec:method:estimator} is the appropriate
+one.
+\end{remark}
+
+\begin{proposition}[Graph-automorphism invariance]
+\label{prop:perm}
+For any automorphism $\sigma$ of $(G, w)$,
+$\SNDG(\sigma \cdot \mathbf{D}, G) = \SNDG(\mathbf{D}, G)$, where
+$(\sigma \cdot \mathbf{D})_{ij} = d(\sigma(i), \sigma(j))$.
+\end{proposition}
+
+\begin{proposition}[Complexity]
+\label{prop:complexity}
+Evaluating $\SNDG$ on a precomputed graph $G$ requires $|E|$ pairwise
+distance computations $d(\cdot,\cdot)$, versus $\binom{n}{2}$ for $\SND$.
+For $k$-NN graphs with $|E| = O(nk)$, this yields a speedup factor of
+$\Theta(n/k)$ in the number of pairwise distance evaluations. This
+statement excludes the cost of constructing $G$.
+\end{proposition}
+
+\subsection{Sampling estimators of $\SND$}
+\label{sec:method:estimator}
+
+When the goal is to approximate full $\SND$ at reduced cost, we derive
+sampling-based estimators from the same graph formalism. Include each pair
+$\{i,j\} \in \Pairs$ in $E$ independently with probability $p \in (0, 1]$,
+with Horvitz--Thompson weights $w_{ij} = 1/p$ for $\{i,j\} \in E$. Denote
+this random graph $G_p$.
+
+\begin{proposition}[Unbiasedness]
+\label{prop:unbiased}
+The estimator
+\[
+\widehat{\SND}(G_p) \;:=\; |\Pairs|^{-1}
+\sum_{\{i,j\} \in E(G_p)} w_{ij}\, d(i,j)
+\]
+satisfies $\E_{G_p}\bigl[\widehat{\SND}(G_p)\bigr] = \SND(\mathbf{D})$.
+\end{proposition}
+
+\begin{remark}[HT weights make $\SNDG$ a sample mean]
+\label{rem:ht-sample-mean}
+Under Horvitz--Thompson weights, $W(G_p) = |E(G_p)|/p$, so $\SNDG$ reduces
+to the uniform sample mean:
+\[
+\SNDG(\mathbf{D}, G_p)
+\;=\; \frac{p}{|E(G_p)|} \sum_{\{i,j\} \in E(G_p)} \frac{1}{p}\, d(i,j)
+\;=\; \frac{1}{|E(G_p)|} \sum_{\{i,j\} \in E(G_p)} d(i,j).
+\]
+This is the \emph{uniform-weight variant} used in
+Theorem~\ref{thm:concentration}; it differs from \mbox{$\widehat{\SND}$} only in normalization.
+\end{remark}
+
+\begin{theorem}[Concentration]
+\label{thm:concentration}
+Assume $d(i,j) \in [0, D_{\max}]$ for all $\{i,j\} \in \Pairs$. Let
+$m = |E(G_p)|$, and define the uniform-weight variant
+\[
+\SNDG^{\mathrm{u}}(\mathbf{D}, G_p) \;:=\; m^{-1}
+\sum_{\{i,j\} \in E(G_p)} d(i,j).
+\]
+Then for any $\delta \in (0,1)$, conditional on $|E(G_p)| = m \geq 1$,
+with probability at least $1 - \delta$ over the randomness of $G_p$,
+\begin{equation}
+\label{eq:concentration}
+\abs{\SNDG^{\mathrm{u}}(\mathbf{D}, G_p) - \SND(\mathbf{D})}
+\;\leq\; D_{\max} \sqrt{\frac{\log(2/\delta)}{2m}}.
+\end{equation}
+\end{theorem}
+
+\begin{remark}[Sharper finite-population bounds]
+\label{rem:serfling}
+For sampling fractions $m/|\Pairs|$ bounded away from zero, Serfling's
+inequality \citep{serfling1974probability} gives a bound of the form
+$D_{\max}\sqrt{(1 - (m-1)/|\Pairs|)\log(2/\delta)/(2m)}$, which is strictly
+sharper. See also \citet{bardenet2015concentration} for further
+refinements and an empirical-Bernstein variant.
+\end{remark}
+
+Theorem~\ref{thm:concentration} gives a rate of $O(1/\sqrt{m})$ in the
+number of sampled edges, independent of the total number of agents. For
+target error $\varepsilon$, it suffices to sample
+$m = O\bigl(D_{\max}^2\, \varepsilon^{-2}\, \log(1/\delta)\bigr)$ edges,
+which for large $n$ is vastly smaller than $\binom{n}{2}$.
+
+% ============================================================
+\section{Experiments}
+\label{sec:experiments}
+
+We validate the four core claims of Sections~\ref{sec:method}
+and~\ref{sec:theory} on a single task: VMAS Multi-Agent Goal Navigation
+\citep{bettini2022vmas}, the same didactic scenario used in
+\citet{bettini2025snd} to illustrate how SND varies with goal
+assignment. The experiment is intentionally narrow: our contribution is
+a measurement tool, so the experiments are designed to verify that tool
+rather than to demonstrate new training outcomes. All four validations of the core theory share a single code path and
+a single set of trained policies; we run them at team sizes $n \in
+\{4, 8, 16\}$ on both a random-init checkpoint (iter 0) and a
+partially trained checkpoint (iter 100). We conclude with a separate
+scaling demonstration on a 500-iteration PPO training run at $n=100$.
+
+\subsection{Setup}
+\label{sec:experiments:setup}
+
+\paragraph{Environment and policies.} We use VMAS Multi-Agent Goal
+Navigation with continuous actions, \texttt{num\_envs}~$= 32$ parallel
+environments, and a rollout horizon of 128 steps. Each agent $i$ has an
+independently parameterized Gaussian MLP policy $\policy{i}$ with two
+hidden layers of width 64 and per-dimension learnable log\nobreakdash-standard\nobreakdash-deviation, matching the heterogeneous-policy setup of
+\citet{bettini2025snd}. Policies are trained with Independent PPO using
+the hyperparameters in Appendix~\ref{app:hyperparams}. We do not share
+parameters across agents at any point.
+
+\paragraph{Checkpoints.} For each $n \in \{4, 8, 16\}$ we save two
+checkpoints. The \emph{iter-0} checkpoint is the random initialization
+and serves as a near-homogeneous reference (agents share an
+architecture but have distinct random weights). The \emph{iter-100}
+checkpoint is after 100 PPO iterations and exhibits substantial
+behavioral heterogeneity, with $\SND$ values comparable to those
+reported by \citet{bettini2025snd} on the same scenario.
+
+\paragraph{Rollout set.} The Monte Carlo behavioral-distance estimator
+of Eq.~\eqref{eq:dij} is evaluated on the rollout observation set
+$\Rollouts$ obtained by running the frozen policies for 128 steps
+across 32 parallel environments, yielding $|\Rollouts| \cdot |\Agents|
+= 128 \cdot 32 \cdot n$ observation-policy pairs. Concretely, this is
+16{,}384 evaluations per policy at $n=4$, 32{,}768 at $n=8$, and
+65{,}536 at $n=16$.
+
+\paragraph{Metric implementations.} $\SND$ and $\SNDG$ are both
+computed directly from the per-observation $(\mu_i, \sigma_i)$ pairs
+using the closed-form Gaussian Wasserstein distance
+\citep[Definition~1]{bettini2025snd}. For the recovery experiment we
+compute $\SNDG$ both by (a) building the full matrix $\mathbf{D}$ and
+restricting to edges of $K_n$, and (b) computing pairwise distances
+only on the edges of $E$ without materializing $\mathbf{D}$; these two
+paths must agree exactly by construction and we verify this as a
+sanity check.
+
+\subsection{Recovery on the complete graph (Proposition~\ref{prop:recovery})}
+\label{sec:experiments:recovery}
+
+Proposition~\ref{prop:recovery} asserts that $\SNDG(\mathbf{D}, K_n) =
+\SND(\mathbf{D})$ exactly. Figure~\ref{fig:recovery} shows both
+quantities at $n=4$ on both checkpoints. The absolute error is $0.0$ in
+all four cells, matching the proposition up to the numerical precision
+at which it can be tested. This is the trivial direction of the
+theory, but establishes that the Graph-SND implementation is
+correctly aligned with $\SND$ as a point of reference for the
+subsequent experiments.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/recovery.pdf}
+\caption{Proposition~\ref{prop:recovery}: recovery of $\SND$ by
+$\SNDG$ on the complete graph. Left: side-by-side values of $\SND$ and
+$\SNDG$ on $K_4$ at iter~0 (near-homogeneous policies) and iter~100
+(trained policies). Right: absolute recovery error, which is $0.0$ in
+both cases (the y-axis is shown at $10^{-12}$ resolution for context).}
+\label{fig:recovery}
+\end{figure}
+
+\subsection{Unbiasedness of the Horvitz--Thompson estimator
+(Proposition~\ref{prop:unbiased})}
+\label{sec:experiments:unbiased}
+
+Proposition~\ref{prop:unbiased} asserts that
+$\E_{G_p}[\widehat{\SND}(G_p)] = \SND(\mathbf{D})$ for any
+$p \in (0,1]$. We test this empirically at $n = 8$ by drawing 2{,}000
+independent Bernoulli-$p$ graphs for each $p \in \{0.1, 0.25, 0.5,
+0.75\}$, computing $\widehat{\SND}$ on each, and reporting the sample
+mean with a 95\% confidence interval.
+Figure~\ref{fig:unbiasedness} shows the result. The CIs contain
+$\SND(\mathbf{D})$ in every cell across both checkpoints.
+
+As a sharper test, we report the standardized deviation $|\mathrm{bias}|
+/ \mathrm{SE}$ for each cell. Under an unbiased estimator with
+Gaussian-sampling-distribution error, this quantity is approximately
+$\mathcal{N}(0,1)$ in each cell, so we expect most cells to fall below
+$|z_{0.975}| = 1.96$ and roughly 5\% of cells to exceed it. Across all
+eight $(\text{checkpoint}, p)$ combinations, the maximum observed
+$|\mathrm{bias}|/\mathrm{SE}$ is $1.42$, consistent with the
+theoretical prediction. The variance of the estimator scales as
+$1/p$, visible as the widening CIs at small $p$.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/unbiasedness.pdf}
+\caption{Proposition~\ref{prop:unbiased}: empirical unbiasedness of
+$\widehat{\SND}(G_p)$ at $n=8$. Blue dots and whiskers are the sample
+mean and 95\% confidence interval over 2{,}000 random graphs per $p$;
+the dashed line is the true $\SND(\mathbf{D})$. Annotations give the
+standardized deviation $|\mathrm{bias}|/\mathrm{SE}$, all of which are
+well below $1.96$. Left: iter~0 checkpoint. Right: iter~100 checkpoint.}
+\label{fig:unbiasedness}
+\end{figure}
+
+\subsection{Concentration (Theorem~\ref{thm:concentration})}
+\label{sec:experiments:concentration}
+
+Theorem~\ref{thm:concentration} asserts a Hoeffding-type bound on the
+deviation of the uniform-weight variant $\SNDG^{\mathrm{u}}$ from
+$\SND$. We evaluate this at $n = 16$ (so $|\Pairs| = 120$ unordered
+pairs) by drawing 2{,}000 uniform-size edge samples of each size $m
+\in \{6, 12, 24, 48, 72, 96\}$ (5\% through 80\% of all pairs),
+computing $\SNDG^{\mathrm{u}}$ on each, and comparing the empirical
+distribution of $|\SNDG^{\mathrm{u}} - \SND|$ against the theoretical
+bound at $\delta = 0.10$.
+
+Figure~\ref{fig:concentration} plots three quantities: the Hoeffding
+bound $t_H$ of Theorem~\ref{thm:concentration}, the Serfling
+finite-population refinement $t_S$ of Remark~\ref{rem:serfling}, and
+the empirical 95th-percentile of $|\SNDG^{\mathrm{u}} - \SND|$ over the
+2{,}000 draws at each $m$. Across all 12 cells, the empirical
+violation rate of the Hoeffding bound is $0.00$: no single draw out of
+2{,}000 per cell exceeds $t_H$, well under the allowed $\delta = 0.10$.
+The same holds for the Serfling bound.
+
+The empirical line sits well below both theoretical bounds. This is
+expected: Hoeffding and Serfling give distribution-free guarantees that
+hold for any bounded population, and are therefore worst-case tight
+only when the population variance equals $D_{\max}^2/4$. The actual
+distribution of $d(i,j)$ on our trained policies has much smaller
+variance, so the bounds over-estimate the concentration radius. The
+empirical curves still exhibit the predicted $O(1/\sqrt{m})$ slope on
+the log-log axis, and the Serfling bound is uniformly tighter than
+Hoeffding as predicted, with the gap widening at large sampling
+fractions where the finite-population correction matters most.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/concentration.pdf}
+\caption{Theorem~\ref{thm:concentration}: concentration of
+$\SNDG^{\mathrm{u}}$ around $\SND$ at $n=16$. Red: Hoeffding radius
+$t_H$ from Theorem~\ref{thm:concentration}. Purple: Serfling radius
+$t_S$ from Remark~\ref{rem:serfling}. Green: empirical 95th-percentile
+of $|\SNDG^{\mathrm{u}} - \SND|$ over 2{,}000 uniform-size edge
+samples per $m$. Both axes are log-scaled. Across all 12 cells, zero
+draws violate either bound. The empirical gap reflects the fact that
+Hoeffding and Serfling are worst-case over populations bounded in
+$[0, D_{\max}]$; the true $d(i,j)$ variance is much smaller.}
+\label{fig:concentration}
+\end{figure}
+
+\subsection{Wall-clock scaling (Proposition~\ref{prop:complexity})}
+\label{sec:experiments:timing}
+
+Proposition~\ref{prop:complexity} asserts that $\SNDG$ evaluated on
+$|E|$ edges costs $|E|$ pairwise distance computations versus
+$\binom{n}{2}$ for $\SND$. To translate this into wall-clock terms, we
+time both estimators on the iter-100 checkpoint at $n \in \{4, 8, 16\}$
+with Bernoulli inclusion probabilities $p \in \{0.1, 0.25, 0.5, 0.75,
+1.0\}$ and 20 trials per cell. All timings are on CPU with no other
+load.
+
+Figure~\ref{fig:timing} plots the speedup $T_{\mathrm{full}} /
+T_{\mathrm{sampled}}$ as a function of $p$, and the absolute wall-clock
+times for both paths. At $p = 0.1$ we observe speedups in the range
+$10$--$17\times$ across $n \in \{4, 8, 16\}$, decreasing monotonically
+to approximately $1\times$ at $p = 1.0$ as expected (since the
+Bernoulli graph with $p = 1$ is $K_n$). The speedup at small $p$ is
+consistent with the analytical prediction $\binom{n}{2} / \E[|E(G_p)|]
+= 1/p$, modulo a small overhead from graph construction and
+weight-assignment code paths.
+
+One caveat: these timings measure the cost of the \emph{aggregation
+step} of the metric, not the cost of rolling out the policies to
+construct the observation set $\Rollouts$. In the regime where rollout
+collection dominates total cost (e.g., during training with $\SNDG$ as
+a diversity control signal), the wall-clock gains visible here are the
+component that scales with $n$; rollout cost is separate and not
+targeted by this work.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/timing.pdf}
+\caption{Proposition~\ref{prop:complexity}: wall-clock scaling of
+$\SNDG$ versus $\SND$. Left: speedup $T_{\mathrm{full}} /
+T_{\mathrm{sampled}}$ against Bernoulli inclusion probability $p$, one
+line per team size $n$. Right: absolute wall-clock time per estimate
+with error bars over 20 trials. Dashed horizontal lines mark the
+full-$\SND$ cost at each $n$; solid lines are the sampled $\SNDG$
+cost.}
+\label{fig:timing}
+\end{figure}
+
+\subsection{Scaling to $n=100$ under real training dynamics}
+\label{sec:experiments:scaling}
+
+The experiments of Sections~\ref{sec:experiments:recovery}
+through~\ref{sec:experiments:timing} validate Graph-SND at team sizes
+where full $\SND$ remains a tractable baseline. The construction's
+motivation, however, is the regime where $\binom{n}{2}$ pairwise
+evaluations per measurement become a real bottleneck. We close the
+experimental section by demonstrating that the $O(|E|)$ speedup
+predicted by Proposition~\ref{prop:complexity} and the concentration
+guarantees of Theorem~\ref{thm:concentration} hold on a real, extended
+training run at $n = 100$.
+
+\paragraph{Setup.} We trained a team of $100$ independently
+parameterized Gaussian policies on VMAS Multi-Agent Goal Navigation
+using the same Independent PPO configuration as
+Section~\ref{sec:experiments:setup}, with VMAS scenario parameters
+auto-scaled to accommodate the larger agent count
+($\texttt{world\_spawning\_x} = \texttt{world\_spawning\_y} = 4.0$,
+$\texttt{agent\_radius} = 0.03$), $\texttt{num\_envs} = 32$, and a
+reduced training horizon to fit an overnight run on a single GPU.
+Every 25 PPO iterations we logged both $\SND(\mathbf{D})$ (over all
+$\binom{100}{2} = 4{,}950$ pairs) and
+$\widehat{\SND}(G_{0.1})$ (over one Bernoulli-$0.1$ subsample) on the
+current rollout batch, together with the wall-clock cost of each.
+
+\paragraph{Results.} Figure~\ref{fig:scaling-n100} shows both
+$\SND(\mathbf{D})$ and $\widehat{\SND}(G_{0.1})$ across 500 PPO
+iterations, together with the per-measurement wall-clock speedup.
+Three observations stand out.
+
+First, the $\sim\!10\times$ speedup predicted at $p=0.1$ by
+Proposition~\ref{prop:complexity} is sustained across the entire
+training run, with per-measurement speedup in the range
+$9.0\times$--$10.9\times$ and no discernible trend as policies
+diversify: the variation is consistent with run-to-run timing
+noise around the structural $1/p = 10\times$ predicted ratio.
+
+Second, $\widehat{\SND}(G_{0.1})$ tracks $\SND(\mathbf{D})$
+essentially indistinguishably across the run: the two curves overlap
+visually at every one of 21 logged iterations, extending the
+concentration guarantee of Theorem~\ref{thm:concentration} from the
+frozen-checkpoint regime of
+Section~\ref{sec:experiments:concentration} to the non-stationary
+setting of an actual training run.
+
+Third, the SND trajectory itself, rising from a near-homogeneous
+initialization to a peak of $\approx 0.185$ around iter 50--100,
+then consolidating to a steady state of $\approx 0.14$ by iter 500, reflects realistic training dynamics: policies initially
+diversify to solve the navigation task individually, then
+coordinate toward a more compact joint solution as training
+progresses. The point is not the specific trajectory but that
+Graph-SND tracks it correctly.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{rrrrrr}
+\toprule
+iter & $\SND(\mathbf{D})$ & $\widehat{\SND}(G_{0.1})$ &
+$t_{\mathrm{full}}$ (ms) & $t_{\mathrm{sample}}$ (ms) & speedup \\
+\midrule
+  1 & 0.0398 & 0.0391 & 1209 & 115 & 10.5$\times$ \\
+ 50 & 0.1849 & 0.1848 & 1190 & 125 &  9.5$\times$ \\
+100 & 0.1820 & 0.1803 & 1186 & 126 &  9.4$\times$ \\
+200 & 0.1607 & 0.1615 & 1204 & 125 &  9.6$\times$ \\
+300 & 0.1483 & 0.1508 & 1192 & 133 &  9.0$\times$ \\
+400 & 0.1464 & 0.1432 & 1185 & 121 &  9.8$\times$ \\
+500 & 0.1388 & 0.1405 & 1185 & 124 &  9.5$\times$ \\
+\bottomrule
+\end{tabular}
+\caption{Graph-SND scaling on an $n = 100$ PPO training run over 500
+iterations. Both $\SND(\mathbf{D})$ (full pairwise computation over
+$\binom{100}{2} = 4{,}950$ pairs) and
+$\widehat{\SND}(G_{0.1})$ (Horvitz--Thompson estimator on a
+Bernoulli-$0.1$ subsample) are logged every 25 iterations on the
+current rollout batch; a representative subset is shown here and the
+full trajectory appears in Figure~\ref{fig:scaling-n100}. The
+estimator tracks the true $\SND$ to within $\sim 2\%$ throughout,
+at a consistent $9.0\times$--$10.9\times$ wall-clock speedup,
+validating Theorem~\ref{thm:concentration} and
+Proposition~\ref{prop:complexity} under real training dynamics at
+the regime where full $\SND$ becomes computationally meaningful.}
+\label{tab:scaling-n100}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/scaling_n100.pdf}
+\caption{Graph-SND scaling on a $n=100$ PPO training run over 500
+iterations. Left: $\SND(\mathbf{D})$ (full pairwise computation
+over $\binom{100}{2} = 4{,}950$ pairs, blue) and
+$\widehat{\SND}(G_{0.1})$ (Horvitz--Thompson estimator on a
+Bernoulli-$0.1$ subsample, orange) evaluated on the current rollout
+batch every 25 iterations. The two curves overlap visually
+throughout, validating Theorem~\ref{thm:concentration} under
+non-stationary training dynamics. Right: wall-clock speedup
+$T_{\mathrm{full}}/T_{\mathrm{sample}}$ per measurement, stable
+around the predicted $1/p = 10\times$ ratio.}
+\label{fig:scaling-n100}
+\end{figure}
+
+\paragraph{Interpretation.} Together with the frozen-checkpoint
+concentration experiment of
+Section~\ref{sec:experiments:concentration}, this extends the
+empirical case for Graph-SND into the regime it was designed for. At
+$n = 100$, computing the full $\SND$ at every PPO update costs
+$\approx\!1.2$ seconds of aggregation alone per measurement; the
+sampled estimator reduces this to $\approx\!0.12$ seconds while
+preserving the measurement to within noise. For any downstream use
+that queries diversity inside a training loop --- for example, DiCo
+\citep{bettini2024dico} --- this is the difference between a
+negligible overhead and a measurable fraction of update time.
+
+\subsection{Summary and limitations}
+\label{sec:experiments:summary}
+
+The five experiments jointly validate the theory section. Recovery is
+exact; HT unbiasedness holds to within the expected sampling noise;
+the Hoeffding and Serfling concentration bounds are respected in
+every cell with room to spare; the wall-clock behavior tracks the
+$\binom{n}{2}/|E|$ speedup ratio of Proposition~\ref{prop:complexity};
+and the scaling experiment at $n=100$ demonstrates that this speedup
+and the tracking fidelity of $\widehat{\SND}$ survive 500 iterations
+of active PPO training.
+
+We note three scope limits of these experiments. First, our core property validations range only up to $n=16$, with scaling demonstrated at $n=100$. This is large enough to make $\SND$'s quadratic cost visible but small enough that the quadratic cost remains tractable as a baseline. Validating Graph-SND at $n \gg 100$ is the natural next experiment but requires training infrastructure beyond what we use here. Second, we test only one scenario (Multi-Agent Goal Navigation).
+The mathematical content of the theorems is scenario-independent, so
+we expect the results to transfer, but a multi-scenario study is
+future work. Third, we do not yet test the localized-measure
+interpretation of $\SNDG$ on a task where the graph $G$ encodes a
+meaningful interaction structure; that is the natural follow-up
+experiment and we defer it to a separate paper.
+
+% ============================================================
+\section{Discussion}
+\label{sec:discussion}
+
+Graph-SND is deliberately narrow. We have not proposed a new training
+algorithm, policy architecture, or diversity-inducing objective; we
+have replaced the aggregation step of $\SND$ with a construction that
+is parameterized by a graph $G$, recovers $\SND$ exactly when $G$ is
+complete, and scales linearly in $|E|$ instead of quadratically in
+$n$. Everything downstream of the metric, how heterogeneity is
+induced, how policies are parameterized, how diversity is controlled, is unchanged. The virtue of this narrowness is that the results
+compose cleanly with existing work: any method that consumes $\SND$ as
+a scalar signal can consume $\SNDG$ instead, with the choice of $G$
+determining what that signal means.
+
+The two interpretations of $\SNDG$ are a feature of the formalism
+rather than two separate tools. A fixed $G$ expresses a modeling
+commitment, that only certain agent pairs are relevant to the
+diversity question being asked, and the metric answers accordingly.
+A random $G$ with Horvitz--Thompson weights expresses an estimation
+commitment: that $\SND$ itself is the object of interest, and
+computational cost, not interaction structure, is the reason to use a
+sparse graph. Having both interpretations fall out of the same
+definition means a practitioner can switch between them without
+re-implementing anything, and the theoretical guarantees are
+non-overlapping: fixed-$G$ results give exact recovery and invariance,
+random-$G$ results give unbiasedness and concentration.
+
+The most immediate downstream application is behavioral diversity
+control. \citet{bettini2024dico} use $\SND$ as a reference signal
+during training (DiCo), regularizing the training loss toward a
+target diversity value $\SND_{\mathrm{des}}$. Because DiCo treats the
+metric as a black-box scalar, $\SNDG$ can be substituted directly:
+the control objective becomes $\SNDG(\mathbf{D}, G) =
+\SND_{\mathrm{des}}$, with $G$ chosen according to the use case. A
+fixed $G$ converts DiCo into local diversity control, which may be
+desirable in tasks with spatial or functional locality (e.g.,
+controlling diversity within squads but not between squads in a
+large cooperative game). A random $G$ converts DiCo into a
+compute-subsampled variant of standard diversity control, where the
+per-update cost of evaluating the control target drops from
+$O(n^2)$ to $O(m)$ with $m$ tunable by the user. We expect the random-$G$ variant to be the more straightforward mechanical
+substitution; the fixed-$G$ variant raises design questions about how $G$
+should be chosen and whether it should be static or learned jointly with
+the policy. In either case, the resulting closed-loop dynamics, how
+sampling noise in $\widehat{\SND}(G_p)$ interacts with DiCo's set-point
+regulation, or how a fixed local $G$ couples with the PPO update, are
+nontrivial and deserve a dedicated empirical study.
+
+\paragraph{Pilot integration with DiCo.}
+Figure~\ref{fig:dico-pilot} summarizes a GPU pilot in which Graph-SND
+replaces the diversity aggregator inside the DiCo heterogeneity
+controller \citep{bettini2024dico} on VMAS Multi-Agent Goal Navigation,
+holding the set point at $\SND_{\mathrm{des}} = 0.1$ and comparing three
+diversity estimators: full pairwise $\SND$ (complete-graph $K_n$),
+uniform-weight Bernoulli--$0.25$ $\SNDG^{\mathrm{u}}$, and Bernoulli--$0.10$
+$\SNDG^{\mathrm{u}}$.
+The middle panel plots \emph{applied} SND---the post-scaling diversity the
+environment sees after DiCo's ratio acts on per-agent deviations---which
+is the quantity the controller targets; raw pre-scaling spread can grow
+large while applied SND remains near $\SND_{\mathrm{des}}$.
+The three trajectories overlap almost everywhere, matching the
+near-bit-identical estimator behavior one expects when only the edge set
+used inside each distance call changes while the same pairwise Gaussian
+kernel is evaluated on every sampled edge.
+The bottom panel reports the median wall-clock time per training batch for
+the diversity subroutine alone (CUDA-synchronized around the estimate),
+showing the expected reduction from sparse graphs at fixed $n$.
+This pilot is \emph{not} part of the controlled metric benchmark in
+Section~\ref{sec:experiments}: it does not substitute for the checkpoint-based
+validations of Propositions~\ref{prop:recovery}--\ref{prop:unbiased} or
+Theorem~\ref{thm:concentration}.
+It is evidence only that the drop-in substitution composes in a realistic
+BenchMARL training stack and that the intended per-update cost savings appear
+where they matter for diversity control.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\linewidth]{figures/neurips_dico_plot.pdf}
+\caption{\textbf{Pilot: Graph-SND inside DiCo} on VMAS Multi-Agent Goal
+Navigation with $\SND_{\mathrm{des}} = 0.1$.
+\textbf{Top:} mean reward vs.\ PPO iteration for full $\SND$ and two
+Bernoulli uniform-weight Graph-SND estimators ($p \in \{0.25, 0.10\}$).
+\textbf{Middle:} applied SND vs.\ iteration; the horizontal line marks the
+DiCo set point.
+\textbf{Bottom:} median wall-clock milliseconds per training batch for the
+diversity subroutine alone.
+Near-identical applied-SND and reward curves across estimators illustrate
+that the three variants agree at the control interface; sparse graphs
+reduce subroutine time. This figure is illustrative integration evidence,
+not a substitute for the formal experiments in
+Section~\ref{sec:experiments}.}
+\label{fig:dico-pilot}
+\end{figure}
+
+\subsection*{Limitations}
+
+We flag five scope limits beyond those noted in the experimental summary (Section~\ref{sec:experiments:summary}). First, our core experiments range only up to $n = 16$, with a single scaling demonstration at $n=100$. This lower range is where full $\SND$ remains a tractable baseline, which is necessary for the recovery and unbiasedness validations, but validating $\SNDG$ at $n \gg 100$ is the natural next experiment; the limiting factor is MARL training infrastructure at scale, not the metric itself.
+
+Second, we test on a single scenario. Multi-Agent Goal Navigation is
+the scenario in which $\SND$ was originally validated by
+\citet{bettini2025snd}, so it is a natural starting point, but the
+full empirical case for $\SNDG$ requires showing that the recovery,
+unbiasedness, and concentration results hold across the dynamic tasks
+(Flocking in Wind) and diversity-control tasks (Differential
+Steering) from the original paper. We expect them to, because the
+results are scenario-independent at the mathematical level, but an
+empirical multi-scenario study is future work.
+
+Third, we do not test the localized-measure interpretation of
+$\SNDG$ on a task where $G$ carries task-relevant structure. The
+recovery and sampling experiments use either $K_n$ or randomly
+sampled subgraphs, both of which treat $\SNDG$ as an approximation of
+$\SND$ rather than as a separate measure. The fixed-$G$
+interpretation's usefulness is a claim about semantics, not about
+computation, and testing it requires a task where local diversity and
+global diversity mean different things. This is a standalone
+empirical paper and we defer it.
+
+Fourth, all timings reported in Section~\ref{sec:experiments:timing}
+are CPU-only. On GPU, the cost profile changes materially: full
+$\SND$ parallelizes well across pairs, and the $\binom{n}{2}/|E|$
+speedup ratio of Proposition~\ref{prop:complexity} may shrink when
+the full pairwise computation fits comfortably in a single GPU kernel. At $n = 16$, the full pair set is only 120 evaluations, well within the capacity of a single kernel; the regime where GPU parallelism saturates likely begins around $n \geq 50$--$100$. We expect $\SNDG$ to retain a wall-clock advantage when $n$
+is large enough that the full pair set exceeds GPU memory, or when
+the metric must be evaluated inside a training loop at every PPO
+update, but a careful GPU study is deferred.
+
+Fifth, our results validate $\SNDG$ as a post-hoc and in-loop
+\emph{measurement} on policies trained with Independent PPO.
+Substituting $\SNDG$ for $\SND$ inside diversity-\emph{control}
+frameworks (e.g., DiCo \citep{bettini2024dico}) is a one-line change
+at the metric API but introduces a closed-loop coupling between
+estimator and policy update we do not analyze here.
+Figure~\ref{fig:dico-pilot} reports a pilot on VMAS Navigation under DiCo
+at $\SND_{\mathrm{des}} = 0.1$: the three estimators ($p \in \{1.0, 0.25,
+0.1\}$) track the same applied-SND set point with nearly identical mean
+rewards, while Bernoulli subsampling lowers median subroutine time.
+We do not claim optimality, stability across hyperparameters, or
+task-by-task robustness of the closed loop; a full controlled study of
+DiCo$+$Graph-SND remains future work.
+
+\subsection*{Future work}
+
+Beyond resolving each of the limitations above, four extensions are
+natural. The first is learned or task-adaptive $G$: the graph is
+currently a user input, but in many applications the interaction
+structure is itself something the system should discover (e.g., via
+attention weights in a message-passing policy). Treating $G$ as a
+learnable object, with $\SNDG$ computed on the current estimate, connects the metric directly to graph-structured MARL policies.
+
+The second is extension beyond Gaussian policies. The closed-form
+Wasserstein distance that makes $\SND$ practical relies on Gaussian
+action distributions; policies outside this family (categorical
+actions, normalizing flows, mixture policies) require either
+closed-form Wasserstein for the chosen family or a principled
+approximation. We conjecture that the graph-structured aggregation of
+$\SNDG$ is orthogonal to the choice of behavioral distance: the
+propositions and Theorem~\ref{thm:concentration} go through for any
+non-negative behavioral distance bounded in $[0, D_{\max}]$, with
+only the computational characterization
+(Proposition~\ref{prop:complexity}) depending on the per-pair cost of
+the distance itself. Verifying this in practice, e.g., on discrete-action tasks with a total-variation or empirically-estimated Wasserstein, is a direct next experiment.
+
+The third is a deterministic distortion bound for the fixed-$G$
+interpretation. The sampling-based concentration result
+(Theorem~\ref{thm:concentration}) gives a guarantee on the
+random-$G$ estimator but says nothing about how a fixed, structured
+$G$ relates to $\SND$. A useful bound would take the form
+$|\SNDG(\mathbf{D}, G) - \SND(\mathbf{D})| \leq f(G, \mathbf{D})$
+under explicit conditions on the regularity of $\mathbf{D}$ over $G$
+(e.g., a Lipschitz condition on the policy in an observation
+embedding, with $G$ chosen consistent with that embedding). We
+explored this direction in an earlier version of the paper and
+concluded that the cleanest such result requires a careful coupling
+between the behavioral distance and the graph that is worth treating
+as a separate theoretical contribution. We leave it as open.
+
+The fourth is integrating $\SNDG$ inside diversity-control loops as a
+primary study object. The metric substitution itself is a one-line
+change because the controller consumes a scalar; but the resulting
+closed-loop dynamics deserve a dedicated empirical study, particularly
+around how Bernoulli sampling noise in $\widehat{\SND}(G_p)$
+interacts with set-point regulation in DiCo \citep{bettini2024dico},
+and how the inclusion probability $p$ trades off control precision
+against per-update cost.
+\section{Conclusion}
+\label{sec:conclusion}
+
+We introduced Graph-SND, a graph-structured generalization of System
+Neural Diversity that replaces SND's uniform average over all
+$\binom{n}{2}$ agent pairs with a normalized weighted mean over the
+edges of a user-specified graph $G$. The construction admits two
+interpretations selected by the choice of $G$: a localized diversity
+measure when $G$ encodes task-relevant interaction structure, and an
+unbiased sampling estimator of full SND when edges are drawn
+independently with Horvitz--Thompson weights. We proved six formal
+results, recovery on $K_n$, non-negativity, graph-automorphism
+invariance, a complexity reduction, unbiasedness, and Hoeffding-type
+concentration, and verified all of them experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$.
+
+The experiments confirm that recovery is numerically exact, the
+Horvitz--Thompson estimator is unbiased to within expected sampling
+noise, the concentration bound holds in every cell with room to spare
+(zero violations across 24{,}000 draws versus an allowed rate of
+$\delta = 0.1$), and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio at each inclusion probability $p$, and sustains a ${\sim}10\times$ speedup across 500 PPO iterations at $n=100$ while the sampling estimator tracks full \SND{} throughout.
+
+Graph-SND is a drop-in replacement for the aggregation step of SND.
+Any method that consumes SND as a scalar signal, including the DiCo
+diversity-control framework, can substitute Graph-SND immediately,
+with the choice of $G$ determining whether the signal measures local
+diversity or approximates global diversity at reduced cost. All
+experimental code is available at \url{https://github.com/codingwithshawnyt/Graph-SND}.
+
+Two directions are natural next steps. Validation at $n \geq 500$ or in distributed training regimes would further exercise the regime where the $O(n^2) \to O(|E|)$ speedup matters most in practice. A deterministic distortion bound for the
+fixed-$G$ interpretation, complementing the probabilistic
+Hoeffding guarantee of Theorem~\ref{thm:concentration}, would
+characterize how closely Graph-SND approximates full SND when $G$ is
+specified by task structure rather than sampled. Beyond these, the
+question of how to \emph{learn} or task-adapt $G$ during training
+deserves its own study.
+% ============================================================
+\appendix
+\section{Proofs}
+\label{app:proofs}
+
+We use the conventions of Section~\ref{sec:background}: $\Agents$ is the
+agent set with $|\Agents| = n$; $\Pairs = \binom{\Agents}{2}$ is the set
+of unordered agent pairs, with $|\Pairs| = \binom{n}{2}$; $d(i,j) \geq 0$
+is the Monte Carlo behavioral distance~\eqref{eq:dij}, treated as a
+deterministic scalar given the rollout set $\Rollouts$; and $G = (\Agents,
+E, w)$ has non-negative edge weights $w_{ij}$ with total weight
+$W(G) = \sum_{\{i,j\} \in E} w_{ij} > 0$.
+
+\subsection*{Proof of Proposition~\ref{prop:recovery} (Recovery)}
+
+If $G = K_n$ with $w_{ij} = 1$ for all $\{i,j\} \in \Pairs$, then
+$E = \Pairs$ and $W(G) = |\Pairs| = \binom{n}{2}$. Substituting
+into~\eqref{eq:graph-snd},
+\[
+\SNDG(\mathbf{D}, K_n)
+\;=\; \frac{1}{\binom{n}{2}} \sum_{\{i,j\} \in \Pairs} 1 \cdot d(i,j)
+\;=\; \binom{n}{2}^{-1} \sum_{i < j} d(i,j)
+\;=\; \SND(\mathbf{D}). \qed
+\]
+
+\subsection*{Proof of Proposition~\ref{prop:nonneg} (Non-negativity)}
+
+Each term $w_{ij} d(i,j)$ in~\eqref{eq:graph-snd} is a product of
+non-negative factors, so the numerator $\sum_{E} w_{ij} d(i,j) \geq 0$.
+Since $W(G) > 0$ by assumption, $\SNDG(\mathbf{D}, G) \geq 0$.
+
+For the equality condition, $\SNDG = 0$ iff
+$\sum_{\{i,j\} \in E} w_{ij} d(i,j) = 0$. A sum of non-negative terms is
+zero iff each term is zero, so the equality holds iff $w_{ij} d(i,j) = 0$
+for every $\{i,j\} \in E$. Equivalently, $d(i,j) = 0$ for every edge
+$\{i,j\} \in E$ with $w_{ij} > 0$. \qed
+
+\subsection*{Proof of Proposition~\ref{prop:perm} (Automorphism invariance)}
+
+Let $\sigma : \Agents \to \Agents$ be an automorphism of $(G, w)$, meaning
+$\sigma$ is a bijection satisfying $\{i,j\} \in E \iff \{\sigma(i),
+\sigma(j)\} \in E$ and $w_{ij} = w_{\sigma(i)\sigma(j)}$ for all
+$\{i,j\} \in E$. Then
+\begin{align*}
+\SNDG(\sigma \cdot \mathbf{D}, G)
+&\;=\; \frac{1}{W(G)} \sum_{\{i,j\} \in E} w_{ij}\, d(\sigma(i), \sigma(j)).
+\end{align*}
+Reindex the sum by $\{i', j'\} = \{\sigma(i), \sigma(j)\}$. Because
+$\sigma$ is an automorphism, the map $\{i,j\} \mapsto \{\sigma(i),
+\sigma(j)\}$ is a bijection $E \to E$, and $w_{ij} =
+w_{\sigma(i)\sigma(j)} = w_{i'j'}$. Hence
+\[
+\SNDG(\sigma \cdot \mathbf{D}, G)
+\;=\; \frac{1}{W(G)} \sum_{\{i',j'\} \in E} w_{i'j'}\, d(i', j')
+\;=\; \SNDG(\mathbf{D}, G). \qed
+\]
+
+\subsection*{Proof of Proposition~\ref{prop:complexity} (Complexity)}
+
+Evaluating~\eqref{eq:graph-snd} on a precomputed graph $G$ reduces to
+computing $d(i,j)$ for each $\{i,j\} \in E$ and forming a weighted sum. The
+sum costs $O(|E|)$ floating-point operations, dominated by the $|E|$
+pairwise-distance computations. $\SND$ in~\eqref{eq:snd} instead requires
+$|\Pairs| = \binom{n}{2}$ such computations. Since each pairwise-distance
+computation has the same cost in both cases, the speedup factor in the
+number of pairwise-distance evaluations is $\binom{n}{2}/|E|$. For $k$-NN
+graphs $|E| = O(nk)$, giving a factor of $\Theta(n/k)$. This statement
+does not include the cost of constructing $G$. \qed
+
+\subsection*{Proof of Proposition~\ref{prop:unbiased} (Unbiasedness)}
+
+For each $\{i,j\} \in \Pairs$, let $Z_{ij} = \ind[\{i,j\} \in E(G_p)]$.
+By construction, $\{Z_{ij}\}_{\{i,j\} \in \Pairs}$ are independent
+Bernoulli$(p)$ random variables. With $w_{ij} = 1/p$ on edges of $G_p$,
+\[
+\widehat{\SND}(G_p)
+\;=\; |\Pairs|^{-1} \sum_{\{i,j\} \in E(G_p)} w_{ij}\, d(i,j)
+\;=\; |\Pairs|^{-1} \sum_{\{i,j\} \in \Pairs} Z_{ij} \cdot \tfrac{1}{p}
+\cdot d(i,j).
+\]
+Taking expectation and using $\E[Z_{ij}] = p$,
+\[
+\E_{G_p}\!\left[\widehat{\SND}(G_p)\right]
+\;=\; |\Pairs|^{-1} \sum_{\{i,j\} \in \Pairs}
+p \cdot \tfrac{1}{p} \cdot d(i,j)
+\;=\; |\Pairs|^{-1} \sum_{\{i,j\} \in \Pairs} d(i,j)
+\;=\; \SND(\mathbf{D}). \qed
+\]
+
+\subsection*{Proof of Theorem~\ref{thm:concentration} (Concentration)}
+
+We first establish that, conditional on $|E(G_p)| = m$, $E(G_p)$ is a
+uniform random subset of $\Pairs$ of size $m$.
+
+\begin{lemma}
+\label{lem:conditional-uniform}
+Let $\{Z_\alpha\}_{\alpha \in \Pairs}$ be i.i.d.\ Bernoulli$(p)$ with
+$p \in (0,1)$, and let $E = \{\alpha : Z_\alpha = 1\}$. Conditional on
+$|E| = m$ with $0 \leq m \leq |\Pairs|$, the set $E$ is uniformly
+distributed over subsets of $\Pairs$ of size $m$.
+\end{lemma}
+\begin{proof}
+For any fixed $T \subseteq \Pairs$ with $|T| = m$,
+\[
+\Prob(E = T \mid |E| = m)
+\;=\; \frac{\Prob(E = T)}{\Prob(|E| = m)}
+\;=\; \frac{p^m (1-p)^{|\Pairs|-m}}
+          {\binom{|\Pairs|}{m} p^m (1-p)^{|\Pairs|-m}}
+\;=\; \binom{|\Pairs|}{m}^{-1},
+\]
+which does not depend on $T$.
+\end{proof}
+
+Now fix $m \geq 1$ and condition on $|E(G_p)| = m$. By
+Lemma~\ref{lem:conditional-uniform}, $E(G_p)$ is a uniform random sample
+of size $m$ without replacement from the finite population
+\[
+\Pi \;:=\; \bigl\{ d(i,j) : \{i,j\} \in \Pairs \bigr\},
+\]
+where $|\Pi| = |\Pairs|$ and each $d(i,j) \in [0, D_{\max}]$. The
+population mean is
+\[
+\mu \;:=\; |\Pairs|^{-1} \sum_{\{i,j\} \in \Pairs} d(i,j) \;=\; \SND(\mathbf{D}),
+\]
+and the sample mean is precisely
+\[
+\SNDG^{\mathrm{u}}(\mathbf{D}, G_p) \;=\; m^{-1} \sum_{\{i,j\} \in E(G_p)} d(i,j).
+\]
+
+\citet[Section 6, Theorem 4]{hoeffding1963probability} establishes that
+the two-sided Hoeffding inequality applies to sampling without
+replacement from a bounded finite population: for any $t > 0$,
+\begin{equation}
+\label{eq:hoeff-wor}
+\Prob\bigl(\abs{\SNDG^{\mathrm{u}} - \SND} \geq t \;\bigm|\; |E(G_p)| = m\bigr)
+\;\leq\; 2\exp\!\left(- \frac{2 m t^2}{D_{\max}^2}\right).
+\end{equation}
+Setting the right-hand side equal to $\delta$ and solving for $t$ gives
+\[
+t \;=\; D_{\max}\sqrt{\frac{\log(2/\delta)}{2m}}.
+\]
+Thus with probability at least $1 - \delta$ conditional on $|E(G_p)| = m$,
+\[
+\abs{\SNDG^{\mathrm{u}}(\mathbf{D}, G_p) - \SND(\mathbf{D})}
+\;\leq\; D_{\max}\sqrt{\frac{\log(2/\delta)}{2m}}. \qed
+\]
+
+% ============================================================
+\section{Hyperparameters}
+\label{app:hyperparams}
+
+Table~\ref{tab:hyperparams} lists the Independent PPO hyperparameters
+used for all experiments in Section~\ref{sec:experiments}. All values
+are held fixed across team sizes $n \in \{4, 8, 16, 100\}$ except as
+noted below.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Hyperparameter} & \textbf{Value} \\
+\midrule
+Optimizer & Adam \\
+Learning rate & $3 \times 10^{-4}$ \\
+Clip parameter $\epsilon$ & $0.2$ \\
+Entropy coefficient & $0.01$ \\
+Value loss coefficient & $0.5$ \\
+Max gradient norm & $0.5$ \\
+GAE $\lambda$ & $0.95$ \\
+Discount $\gamma$ & $0.99$ \\
+Parallel environments & 32 \\
+Rollout horizon & 128 \\
+PPO epochs per update & 4 \\
+Mini-batch size & 512 \\
+Training iterations & 100 \\
+Hidden layer width & 64 \\
+Hidden layers & 2 \\
+Activation & Tanh \\
+\bottomrule
+\end{tabular}
+\caption{Independent PPO hyperparameters used for all experiments.
+The rollout batch per iteration is $\text{Rollout horizon} \times
+\text{Parallel environments} = 128 \times 32 = 4{,}096$ transitions
+per agent.}
+\label{tab:hyperparams}
+\end{table}
+The $n = 100$ scaling run of Section~\ref{sec:experiments:scaling} additionally uses 500 iterations, \texttt{num\_envs} $= 32$ (unchanged), and scenario parameters $\texttt{world\_spawning\_x} = \texttt{world\_spawning\_y} = 4.0$, $\texttt{agent\_radius} = 0.03$ to accommodate the larger team size.
+
+% ============================================================
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
