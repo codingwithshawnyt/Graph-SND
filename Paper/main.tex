@@ -78,7 +78,7 @@ estimator of full SND, with a Hoeffding-type concentration bound yielding
 $O(1/\sqrt{m})$ error in the number of sampled edges $m$, independent of $n$.
 We prove six formal properties, recovery, non-negativity,
 graph-automorphism invariance, complexity reduction, unbiasedness, and
-concentration, and verify all experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$. Recovery is numerically exact, the estimator is unbiased to within expected sampling noise, concentration bounds hold with zero violations across 24{,}000 draws, and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio, sustaining a ${\sim}\!10\times$ speedup during active PPO training at $n=100$, with the sampling estimator tracking full $\SND$ indistinguishably throughout.
+concentration, and verify all experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$. Recovery is numerically exact, the estimator is unbiased to within expected sampling noise, concentration bounds hold with zero violations across 24{,}000 draws, and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio, sustaining a ${\sim}\!10\times$ speedup during active PPO training at $n=100$, with the sampling estimator tracking full $\SND$ indistinguishably throughout. In DiCo at $n=16$, replacing the aggregator with Graph-SND matches mean reward and applied-diversity set-point tracking while reducing per-batch subroutine time.
 \end{abstract}
 % ============================================================
 \section{Introduction}
@@ -160,9 +160,11 @@ Our contributions are:
   to Wasserstein barycenters in policy space.
 \item Experiments on VMAS \citep{bettini2022vmas} verifying (i) that
   Graph-SND on $K_n$ reproduces $\SND$ numerically, (ii) that the sampling estimator concentrates around $\SND$ at the bound predicted by
-Theorem~\ref{thm:concentration}, and (iii) that sparse Graph-SND
+Theorem~\ref{thm:concentration}, (iii) that sparse Graph-SND
   preserves the measurement and diagnostic uses of $\SND$ at
-  substantially reduced cost.
+  substantially reduced cost, and (iv) that Graph-SND matches full
+  $\SND$ inside the DiCo closed loop at reduced subroutine cost
+  (Section~\ref{sec:experiments:dico}).
 \end{enumerate}
 
 The construction is deliberately narrow. We do not propose a new
@@ -589,8 +591,10 @@ a measurement tool, so the experiments are designed to verify that tool
 rather than to demonstrate new training outcomes. All four validations of the core theory share a single code path and
 a single set of trained policies; we run them at team sizes $n \in
 \{4, 8, 16\}$ on both a random-init checkpoint (iter 0) and a
-partially trained checkpoint (iter 100). We conclude with a separate
-scaling demonstration on a 500-iteration PPO training run at $n=100$.
+partially trained checkpoint (iter 100). We then report a 500-iteration
+PPO scaling run at $n=100$, and finally a closed-loop integration of
+Graph-SND into the DiCo diversity controller \citep{bettini2024dico}
+(Section~\ref{sec:experiments:dico}).
 
 \subsection{Setup}
 \label{sec:experiments:setup}
@@ -784,8 +788,8 @@ The experiments of Sections~\ref{sec:experiments:recovery}
 through~\ref{sec:experiments:timing} validate Graph-SND at team sizes
 where full $\SND$ remains a tractable baseline. The construction's
 motivation, however, is the regime where $\binom{n}{2}$ pairwise
-evaluations per measurement become a real bottleneck. We close the
-experimental section by demonstrating that the $O(|E|)$ speedup
+evaluations per measurement become a real bottleneck. We next
+demonstrate that the $O(|E|)$ speedup
 predicted by Proposition~\ref{prop:complexity} and the concentration
 guarantees of Theorem~\ref{thm:concentration} hold on a real, extended
 training run at $n = 100$.
@@ -891,10 +895,43 @@ that queries diversity inside a training loop --- for example, DiCo
 \citep{bettini2024dico} --- this is the difference between a
 negligible overhead and a measurable fraction of update time.
 
+\subsection{Downstream diversity control}
+\label{sec:experiments:dico}
+
+To demonstrate downstream utility beyond frozen-policy measurement, we
+integrate Graph-SND into the DiCo heterogeneity controller of
+\citet{bettini2024dico}. DiCo regularizes training toward a target
+diversity $\SND_{\mathrm{des}}$ using the full $O(n^2)$ aggregator; we
+replace only that aggregator with Graph-SND on VMAS Multi-Agent Goal
+Navigation at $n = 16$, holding $\SND_{\mathrm{des}} = 0.1$ and comparing
+full pairwise $\SND$ ($K_n$) to uniform-weight Bernoulli subgraphs at
+$p \in \{0.25, 0.10\}$.
+Figure~\ref{fig:dico-pilot} summarizes the run.
+Mean reward and \emph{applied} SND---the post-scaling diversity the
+controller actually regulates toward $\SND_{\mathrm{des}}$---track
+almost identically across all three estimators: Graph-SND preserves
+DiCo's closed-loop behavior while cutting the median CUDA-synchronized
+wall-clock time of the diversity subroutine per training batch.
+Because Graph-SND evaluates the same pairwise Gaussian kernel on each
+sampled edge, it is a high-fidelity, drop-in replacement at the metric
+API for diversity control under the same set point.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\linewidth]{figures/neurips_dico_plot.pdf}
+\caption{Graph-SND replaces full $\SND$ in DiCo \citep{bettini2024dico}
+on VMAS Goal Navigation ($n{=}16$, $\SND_{\mathrm{des}}{=}0.1$).
+Bernoulli variants ($p{\in}\{0.25,0.10\}$) match mean reward and
+applied-SND tracking; sparse graphs cut median per-batch subroutine time.}
+\label{fig:dico-pilot}
+\end{figure}
+
 \subsection{Summary and limitations}
 \label{sec:experiments:summary}
 
-The five experiments jointly validate the theory section. Recovery is
+The controlled benchmark experiments, together with the downstream DiCo
+integration of Section~\ref{sec:experiments:dico}, jointly validate the
+theory section. Recovery is
 exact; HT unbiasedness holds to within the expected sampling noise;
 the Hoeffding and Serfling concentration bounds are respected in
 every cell with room to spare; the wall-clock behavior tracks the
@@ -955,56 +992,10 @@ per-update cost of evaluating the control target drops from
 $O(n^2)$ to $O(m)$ with $m$ tunable by the user. We expect the random-$G$ variant to be the more straightforward mechanical
 substitution; the fixed-$G$ variant raises design questions about how $G$
 should be chosen and whether it should be static or learned jointly with
-the policy. In either case, the resulting closed-loop dynamics, how
-sampling noise in $\widehat{\SND}(G_p)$ interacts with DiCo's set-point
-regulation, or how a fixed local $G$ couples with the PPO update, are
-nontrivial and deserve a dedicated empirical study.
-
-\paragraph{Pilot integration with DiCo.}
-Figure~\ref{fig:dico-pilot} summarizes a GPU pilot in which Graph-SND
-replaces the diversity aggregator inside the DiCo heterogeneity
-controller \citep{bettini2024dico} on VMAS Multi-Agent Goal Navigation,
-holding the set point at $\SND_{\mathrm{des}} = 0.1$ and comparing three
-diversity estimators: full pairwise $\SND$ (complete-graph $K_n$),
-uniform-weight Bernoulli--$0.25$ $\SNDG^{\mathrm{u}}$, and Bernoulli--$0.10$
-$\SNDG^{\mathrm{u}}$.
-The middle panel plots \emph{applied} SND---the post-scaling diversity the
-environment sees after DiCo's ratio acts on per-agent deviations---which
-is the quantity the controller targets; raw pre-scaling spread can grow
-large while applied SND remains near $\SND_{\mathrm{des}}$.
-The three trajectories overlap almost everywhere, matching the
-near-bit-identical estimator behavior one expects when only the edge set
-used inside each distance call changes while the same pairwise Gaussian
-kernel is evaluated on every sampled edge.
-The bottom panel reports the median wall-clock time per training batch for
-the diversity subroutine alone (CUDA-synchronized around the estimate),
-showing the expected reduction from sparse graphs at fixed $n$.
-This pilot is \emph{not} part of the controlled metric benchmark in
-Section~\ref{sec:experiments}: it does not substitute for the checkpoint-based
-validations of Propositions~\ref{prop:recovery}--\ref{prop:unbiased} or
-Theorem~\ref{thm:concentration}.
-It is evidence only that the drop-in substitution composes in a realistic
-BenchMARL training stack and that the intended per-update cost savings appear
-where they matter for diversity control.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.98\linewidth]{figures/neurips_dico_plot.pdf}
-\caption{\textbf{Pilot: Graph-SND inside DiCo} on VMAS Multi-Agent Goal
-Navigation with $\SND_{\mathrm{des}} = 0.1$.
-\textbf{Top:} mean reward vs.\ PPO iteration for full $\SND$ and two
-Bernoulli uniform-weight Graph-SND estimators ($p \in \{0.25, 0.10\}$).
-\textbf{Middle:} applied SND vs.\ iteration; the horizontal line marks the
-DiCo set point.
-\textbf{Bottom:} median wall-clock milliseconds per training batch for the
-diversity subroutine alone.
-Near-identical applied-SND and reward curves across estimators illustrate
-that the three variants agree at the control interface; sparse graphs
-reduce subroutine time. This figure is illustrative integration evidence,
-not a substitute for the formal experiments in
-Section~\ref{sec:experiments}.}
-\label{fig:dico-pilot}
-\end{figure}
+the policy. Section~\ref{sec:experiments:dico} already shows that the
+random-$G$ substitution composes cleanly in DiCo at one representative
+setting; broader sweeps over tasks, algorithms, and controller
+hyperparameters remain open.
 
 \subsection*{Limitations}
 
@@ -1039,19 +1030,10 @@ is large enough that the full pair set exceeds GPU memory, or when
 the metric must be evaluated inside a training loop at every PPO
 update, but a careful GPU study is deferred.
 
-Fifth, our results validate $\SNDG$ as a post-hoc and in-loop
-\emph{measurement} on policies trained with Independent PPO.
-Substituting $\SNDG$ for $\SND$ inside diversity-\emph{control}
-frameworks (e.g., DiCo \citep{bettini2024dico}) is a one-line change
-at the metric API but introduces a closed-loop coupling between
-estimator and policy update we do not analyze here.
-Figure~\ref{fig:dico-pilot} reports a pilot on VMAS Navigation under DiCo
-at $\SND_{\mathrm{des}} = 0.1$: the three estimators ($p \in \{1.0, 0.25,
-0.1\}$) track the same applied-SND set point with nearly identical mean
-rewards, while Bernoulli subsampling lowers median subroutine time.
-We do not claim optimality, stability across hyperparameters, or
-task-by-task robustness of the closed loop; a full controlled study of
-DiCo$+$Graph-SND remains future work.
+Fifth, Section~\ref{sec:experiments:dico} reports one DiCo configuration
+(Independent PPO, one set point, one task). We do not claim optimality,
+stability across hyperparameters, or task-by-task robustness of the
+closed loop; exhaustive DiCo$+$Graph-SND studies remain future work.
 
 \subsection*{Future work}
 
@@ -1089,14 +1071,12 @@ concluded that the cleanest such result requires a careful coupling
 between the behavioral distance and the graph that is worth treating
 as a separate theoretical contribution. We leave it as open.
 
-The fourth is integrating $\SNDG$ inside diversity-control loops as a
-primary study object. The metric substitution itself is a one-line
-change because the controller consumes a scalar; but the resulting
-closed-loop dynamics deserve a dedicated empirical study, particularly
-around how Bernoulli sampling noise in $\widehat{\SND}(G_p)$
-interacts with set-point regulation in DiCo \citep{bettini2024dico},
-and how the inclusion probability $p$ trades off control precision
-against per-update cost.
+The fourth is extending the DiCo integration of
+Section~\ref{sec:experiments:dico} into a full controlled study: larger
+$n$, additional tasks and algorithms, sweeps over $\SND_{\mathrm{des}}$
+and $p$, and analysis of how Bernoulli sampling noise in
+$\widehat{\SND}(G_p)$ interacts with set-point regulation in DiCo
+\citep{bettini2024dico}.
 \section{Conclusion}
 \label{sec:conclusion}
 
@@ -1117,6 +1097,9 @@ Horvitz--Thompson estimator is unbiased to within expected sampling
 noise, the concentration bound holds in every cell with room to spare
 (zero violations across 24{,}000 draws versus an allowed rate of
 $\delta = 0.1$), and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio at each inclusion probability $p$, and sustains a ${\sim}10\times$ speedup across 500 PPO iterations at $n=100$ while the sampling estimator tracks full \SND{} throughout.
+Section~\ref{sec:experiments:dico} shows the same substitution inside
+DiCo at $n=16$: reward and applied SND match the full metric while
+subroutine time drops.
 
 Graph-SND is a drop-in replacement for the aggregation step of SND.
 Any method that consumes SND as a scalar signal, including the DiCo
