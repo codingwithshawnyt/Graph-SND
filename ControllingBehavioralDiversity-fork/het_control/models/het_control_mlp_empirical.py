@@ -34,6 +34,7 @@ class HetControlMlpEmpirical(Model):
         process_shared: bool,
         diversity_estimator: str = "full",
         diversity_p: float = 1.0,
+        diversity_knn_k: int = 3,
         **kwargs,
     ):
         """DiCo policy model
@@ -41,21 +42,24 @@ class HetControlMlpEmpirical(Model):
         Args:
             activation_class (Type[nn.Module]): activation class to be used.
             num_cells (int or Sequence[int], optional): number of cells of every layer in between the input and output. If
-                an integer is provided, every layer will have the same number of cells. If an iterable is provided,
-                the linear layers out_features will match the content of num_cells.
+            an integer is provided, every layer will have the same number of cells. If an iterable is provided,
+            the linear layers out_features will match the content of num_cells.
             desired_snd (float): The desired SND diversity
-            probabilistic (bool):  Whether the model has stochastic actions or not.
+            probabilistic (bool): Whether the model has stochastic actions or not.
             scale_mapping (str, optional): Type of mapping to use to make the std_dev output of the policy positive
-                (choices: "softplus", "exp", "relu", "biased_softplus_1")
-            tau (float): The soft-update parameter of the estimated diversity.  Must be between 0 and 1
-            bootstrap_from_desired_snd (bool):  Whether on the first iteration the estimated SND should be bootstrapped
-                from the desired snd (True) or from the measured SND (False)
+            (choices: "softplus", "exp", "relu", "biased_softplus_1")
+            tau (float): The soft-update parameter of the estimated diversity. Must be between 0 and 1
+            bootstrap_from_desired_snd (bool): Whether on the first iteration the estimated SND should be bootstrapped
+            from the desired snd (True) or from the measured SND (False)
             process_shared (bool): Whether to process the homogeneous part of the policy with a tanh squashing operation to the action space domain
             diversity_estimator (str): Which SND estimator drives the DiCo scaling factor. One of ``"full"``
-                (the original C(n, 2) mean), ``"graph_p01"`` or ``"graph_p025"`` (uniform-weight Graph-SND
-                on a Bernoulli(p) subgraph). Defaults to ``"full"`` for backward compatibility.
+            (the original C(n, 2) mean), ``"graph_p01"`` or ``"graph_p025"`` (uniform-weight Graph-SND
+            on a Bernoulli(p) subgraph), or ``"knn"`` (uniform-weight Graph-SND on a dynamic k-NN
+            spatial graph). Defaults to ``"full"`` for backward compatibility.
             diversity_p (float): Bernoulli inclusion probability consumed by the Graph-SND path.
-                Ignored when ``diversity_estimator == "full"``.
+            Ignored when ``diversity_estimator in {"full", "knn"}``.
+            diversity_knn_k (int): Number of nearest neighbours for the k-NN graph. Only used
+            when ``diversity_estimator == "knn"``. Defaults to 3.
         """
 
         super().__init__(**kwargs)
@@ -69,6 +73,7 @@ class HetControlMlpEmpirical(Model):
         self.process_shared = process_shared
         self.diversity_estimator = diversity_estimator
         self.diversity_p = float(diversity_p)
+        self.diversity_knn_k = int(diversity_knn_k)
         # Bernoulli RNG lives in ``het_control.graph_snd.get_graph_rng(self)`` (weak-key
         # registry), not on this module, so TorchRL can ``deepcopy`` the actor for
         # PPO loss. GraphSNDLoggingCallback reseeds via ``reseed_graph_rng`` each iter.
@@ -330,6 +335,18 @@ class HetControlMlpEmpirical(Model):
             agent_outputs = agent_net(obs)
             agent_actions.append(agent_outputs)
 
+        # Build per-env k-NN positions when the knn estimator is active.
+        # obs has shape [*batch, n_agents, obs_dim]. We flatten all leading
+        # batch dims to get [B, n_agents, obs_dim], then slice [:, :, :2]
+        # to extract agent (x, y) for every parallel environment.
+        # compute_knn_diversity_per_env builds a *different* k-NN graph per
+        # environment so that agents only diversify from their true spatial
+        # neighbours in each env, not from a single snapshot of env 0.
+        knn_positions = None
+        if self.diversity_estimator == "knn":
+            obs_flat = obs.reshape(-1, self.n_agents, obs.shape[-1])
+            knn_positions = obs_flat[:, :, :2].detach().float().cpu()
+
         # Dispatch to full SND or Graph-SND based on the configured estimator.
         # ``time_diversity_call`` wraps the call in ``torch.cuda.synchronize()``
         # on each side and records the elapsed ms into a module-level buffer,
@@ -341,7 +358,9 @@ class HetControlMlpEmpirical(Model):
             p=self.diversity_p,
             rng=get_graph_rng(self),
             just_mean=True,
-        )  # Compute the SND of these unscaled policies (scalar tensor)
+            knn_k=self.diversity_knn_k,
+            knn_positions=knn_positions,
+        ) # Compute the SND of these unscaled policies (scalar tensor)
         distance = distance_scalar.unsqueeze(-1)
         if self.estimated_snd.isnan().any():  # First iteration
             distance = self.desired_snd if self.bootstrap_from_desired_snd else distance
@@ -368,6 +387,7 @@ class HetControlMlpEmpiricalConfig(ModelConfig):
     # Graph-SND dispatch knobs. Defaults keep the unmodified DiCo path active.
     diversity_estimator: str = "full"
     diversity_p: float = 1.0
+    diversity_knn_k: int = 3
 
     @staticmethod
     def associated_class():

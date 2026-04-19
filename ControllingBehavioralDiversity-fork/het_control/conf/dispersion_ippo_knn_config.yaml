@@ -1,0 +1,39 @@
+# Kill-Shot 1: Localised Diversity via Dynamic k-NN Graphs on Dispersion.
+#
+# Dispersion requires agents to spread out and cover food landmarks — a
+# task where *local* spatial specialisation (diversify only from nearby
+# neighbours) should outperform global diversity pressure.
+#
+# Three estimators are compared via launch_knn_dico.sh:
+#   A) IPPO baseline  (desired_snd=-1)
+#   B) Full SND DiCo  (C(n,2) Wasserstein, global diversity)
+#   C) k-NN Graph-SND (k=3, per-env local diversity)
+#
+# Launch:
+#   python het_control/run_scripts/run_dispersion_ippo.py \
+#       --config-name dispersion_ippo_knn_config
+
+defaults:
+  - experiment: het_control_experiment
+  - algorithm: ippo
+  - task: vmas/dispersion
+  - model: hetcontrolmlpempirical
+  - model@critic_model: layers/mlp
+  - _self_
+
+seed: 0
+use_action_loss: True
+action_loss_lr: 0.00003
+
+model:
+  diversity_estimator: knn
+  diversity_knn_k: 3
+
+graph_snd_log_path: ${hydra:runtime.output_dir}/graph_snd_log.csv
+
+experiment:
+  render: false
+
+hydra:
+  searchpath:
+    - pkg://benchmarl/conf

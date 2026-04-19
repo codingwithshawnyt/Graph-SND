@@ -6,7 +6,9 @@ When ``estimator == "full"`` we delegate bit-identically to the existing
 DiCo codepath; when ``estimator in {"graph_p01", "graph_p025"}`` we
 measure diversity on a Bernoulli(p) random subgraph with the
 uniform-weight Graph-SND estimator (Remark 8 / Theorem 9 in the
-Graph-SND paper).
+Graph-SND paper). When ``estimator == "knn"`` we build a dynamic
+k-nearest-neighbour graph from agent spatial coordinates and compute
+uniform-weight Graph-SND over that localized subgraph.
 
 All diversity calls are routed through :func:`time_diversity_call`,
 which records per-call wall-clock (milliseconds) into a module-level
@@ -73,7 +75,7 @@ def reseed_graph_rng(owner: object, seed: int) -> None:
     get_graph_rng(owner).manual_seed(int(seed))
 
 
-VALID_ESTIMATORS = ("full", "graph_p01", "graph_p025")
+VALID_ESTIMATORS = ("full", "graph_p01", "graph_p025", "knn")
 
 
 _CURRENT_ITER_TIMES_MS: List[float] = []
@@ -208,6 +210,100 @@ def compute_graph_snd_uniform(
     return stacked.mean()
 
 
+def compute_knn_edges(
+    positions: torch.Tensor,
+    k: int,
+) -> List[Tuple[int, int]]:
+    """Build a symmetric k-NN edge list from agent spatial positions.
+
+    Wraps :func:`graphsnd.graphs.knn_edges` and converts the returned
+    ``LongTensor(|E|, 2)`` into the ``List[Tuple[int, int]]`` format
+    consumed by :func:`compute_graph_snd_uniform`.
+
+    Parameters
+    ----------
+    positions : torch.Tensor
+        Agent positions of shape ``(n_agents, 2)`` (CPU or CUDA).
+    k : int
+        Number of nearest neighbours per agent. Must satisfy
+        ``1 <= k < n_agents``.
+
+    Returns
+    -------
+    list of tuple of int
+        Edge list ``(i, j)`` with ``i < j``. Falls back to the
+        complete edge set (all :math:`C(n, 2)` pairs) when
+        ``n_agents <= k``, because the k-NN graph is undefined when
+        every agent is already a neighbour of every other.
+    """
+    from graphsnd.graphs import knn_edges
+
+    n = positions.shape[0]
+    if n <= k:
+        logger.debug(
+            "compute_knn_edges: n=%d <= k=%d; falling back to full C(n,2) pairs.",
+            n, k,
+        )
+        idx = torch.triu_indices(n, n, offset=1)
+        return list(zip(idx[0].tolist(), idx[1].tolist()))
+
+    positions_cpu = positions.detach().float().cpu()
+    edges_tensor = knn_edges(positions_cpu, k=k, symmetric=True)
+    return [(int(e[0]), int(e[1])) for e in edges_tensor.tolist()]
+
+
+def compute_knn_diversity_per_env(
+    agent_actions: List[torch.Tensor],
+    positions: torch.Tensor,
+    k: int,
+    just_mean: bool = True,
+) -> torch.Tensor:
+    """Per-env k-NN Graph-SND: compute a *different* k-NN graph for each
+    parallel environment in the batch, then average the per-env diversity
+    scalars.
+
+    This is the **scientifically correct** way to handle vectorised RL
+    batches.  Agents' spatial layouts differ across parallel environments,
+    so a single k-NN graph computed from one environment snapshot would
+    impose wrong neighbourhood structure on the rest.
+
+    Parameters
+    ----------
+    agent_actions : list of torch.Tensor
+        Per-agent action tensors, each of shape ``[B, n_agents, action_dim]``
+        (the layout produced by :class:`HetControlMlpEmpirical`).
+    positions : torch.Tensor
+        Agent spatial positions of shape ``[B, n_agents, 2]``.
+    k : int
+        Number of nearest neighbours per agent.
+    just_mean : bool
+        Forwarded to :func:`compute_graph_snd_uniform`.
+
+    Returns
+    -------
+    torch.Tensor
+        A 0-d scalar tensor on the same device/dtype as the input actions,
+        equal to the arithmetic mean of per-env Graph-SND values.
+    """
+    B = positions.shape[0]
+    n_agents = positions.shape[1]
+    snd_vals: List[torch.Tensor] = []
+
+    for b in range(B):
+        edges = compute_knn_edges(positions[b], k)
+        env_actions = [a[b] for a in agent_actions]
+        if not edges:
+            snd_vals.append(
+                compute_behavioral_distance(env_actions, just_mean=just_mean).mean()
+            )
+        else:
+            snd_vals.append(
+                compute_graph_snd_uniform(env_actions, edges, just_mean=just_mean)
+            )
+
+    return torch.stack(snd_vals).mean()
+
+
 def compute_diversity(
     agent_actions: List[torch.Tensor],
     *,
@@ -215,6 +311,8 @@ def compute_diversity(
     p: Optional[float] = None,
     rng: Optional[torch.Generator] = None,
     just_mean: bool = True,
+    knn_k: int = 3,
+    knn_positions: Optional[torch.Tensor] = None,
 ) -> torch.Tensor:
     """Dispatch to the full-SND path or a Graph-SND path based on ``estimator``.
 
@@ -225,25 +323,39 @@ def compute_diversity(
     recovery property exercised by
     ``tests/test_graph_snd_recovers_full_snd.py``).
 
+    When ``estimator == "knn"``, a **per-env** dynamic k-NN graph is
+    built from ``knn_positions`` and diversity is computed as
+    uniform-weight Graph-SND over each environment's localised edge set,
+    then averaged across environments.  This correctly handles the case
+    where different parallel environments have different agent layouts.
+
     Parameters
     ----------
     agent_actions : list of torch.Tensor
         Per-agent action tensors of shape ``[*batch, action_features]``
         (or ``[*batch, 2 * action_features]`` when ``just_mean`` is False).
     estimator : str
-        One of ``"full"``, ``"graph_p01"``, ``"graph_p025"``. Any other
-        value raises :class:`ValueError`.
+        One of ``"full"``, ``"graph_p01"``, ``"graph_p025"``, ``"knn"``.
+        Any other value raises :class:`ValueError`.
     p : float, optional
         Bernoulli inclusion probability used for Graph-SND. If omitted,
         it is parsed from ``estimator`` (``"graph_p01" -> 0.1``,
-        ``"graph_p025" -> 0.25``). Ignored for ``estimator == "full"``.
+        ``"graph_p025" -> 0.25``). Ignored for ``estimator in {"full", "knn"}``.
     rng : torch.Generator, optional
         Torch RNG for the Bernoulli draw. If omitted, a freshly
         constructed generator is used (callers in the DiCo loop pass in
-        a seeded one for reproducibility).
+        a seeded one for reproducibility). Ignored for
+        ``estimator in {"full", "knn"}``.
     just_mean : bool, optional
         Forwarded to the underlying Wasserstein kernel. ``True`` matches
         the training-time DiCo path.
+    knn_k : int, optional
+        Number of nearest neighbours for the k-NN graph. Only used when
+        ``estimator == "knn"``. Defaults to 3.
+    knn_positions : torch.Tensor, optional
+        Agent spatial positions of shape ``[B, n_agents, 2]`` (one
+        layout per parallel environment). Required when
+        ``estimator == "knn"``; ignored otherwise.
 
     Returns
     -------
@@ -256,6 +368,17 @@ def compute_diversity(
         return compute_behavioral_distance(
             agent_actions, just_mean=just_mean
         ).mean()
+
+    if estimator == "knn":
+        if knn_positions is None:
+            raise ValueError(
+                "knn estimator requires knn_positions with shape [B, n_agents, 2]."
+            )
+        if knn_positions.dim() == 2:
+            knn_positions = knn_positions.unsqueeze(0)
+        return compute_knn_diversity_per_env(
+            agent_actions, knn_positions, knn_k, just_mean=just_mean
+        )
 
     if estimator not in VALID_ESTIMATORS:
         raise ValueError(
