@@ -78,7 +78,7 @@ estimator of full SND, with a Hoeffding-type concentration bound yielding
 $O(1/\sqrt{m})$ error in the number of sampled edges $m$, independent of $n$.
 We prove six formal properties, recovery, non-negativity,
 graph-automorphism invariance, complexity reduction, unbiasedness, and
-concentration, and verify all experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$. Recovery is numerically exact, the estimator is unbiased to within expected sampling noise, concentration bounds hold with zero violations across 24{,}000 draws, and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio, sustaining a ${\sim}\!10\times$ speedup during active PPO training at $n=100$, with the sampling estimator tracking full $\SND$ indistinguishably throughout. In DiCo at $n=16$, replacing the aggregator with Graph-SND matches mean reward and applied-diversity set-point tracking while reducing per-batch subroutine time.
+concentration, and verify all experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$. Recovery is numerically exact, the estimator is unbiased to within expected sampling noise, concentration bounds hold with zero violations across 24{,}000 draws, and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio, sustaining a ${\sim}\!10\times$ speedup during active PPO training at $n=100$, with the sampling estimator tracking full $\SND$ indistinguishably throughout. In DiCo at $n=16$, replacing the aggregator with Graph-SND matches mean reward and applied-diversity set-point tracking while reducing per-batch subroutine time; on VMAS Dispersion at $n=10$, a localized $k$-NN Graph-SND controller tracks the mean-reward trajectory of full pairwise $\SND$ while using only $O(nk)$ neighbour edges per update.
 \end{abstract}
 % ============================================================
 \section{Introduction}
@@ -163,8 +163,8 @@ Our contributions are:
 Theorem~\ref{thm:concentration}, (iii) that sparse Graph-SND
   preserves the measurement and diagnostic uses of $\SND$ at
   substantially reduced cost, and (iv) that Graph-SND matches full
-  $\SND$ inside the DiCo closed loop at reduced subroutine cost
-  (Section~\ref{sec:experiments:dico}).
+  $\SND$ inside DiCo on Navigation (Bernoulli sampling) and tracks it on
+  Dispersion with a localized $k$-NN graph (Section~\ref{sec:experiments:dico}).
 \end{enumerate}
 
 The construction is deliberately narrow. We do not propose a new
@@ -592,9 +592,9 @@ rather than to demonstrate new training outcomes. All four validations of the co
 a single set of trained policies; we run them at team sizes $n \in
 \{4, 8, 16\}$ on both a random-init checkpoint (iter 0) and a
 partially trained checkpoint (iter 100). We then report a 500-iteration
-PPO scaling run at $n=100$, and finally a closed-loop integration of
+PPO scaling run at $n=100$, and finally closed-loop integrations of
 Graph-SND into the DiCo diversity controller \citep{bettini2024dico}
-(Section~\ref{sec:experiments:dico}).
+(Section~\ref{sec:experiments:dico}) on Navigation and Dispersion.
 
 \subsection{Setup}
 \label{sec:experiments:setup}
@@ -898,6 +898,7 @@ negligible overhead and a measurable fraction of update time.
 \subsection{Downstream diversity control}
 \label{sec:experiments:dico}
 
+\paragraph{Sampling-based Graph-SND in DiCo (Navigation).}
 To demonstrate downstream utility beyond frozen-policy measurement, we
 integrate Graph-SND into the DiCo heterogeneity controller of
 \citet{bettini2024dico}. DiCo regularizes training toward a target
@@ -926,6 +927,35 @@ applied-SND tracking; sparse graphs cut median per-batch subroutine time.}
 \label{fig:dico-pilot}
 \end{figure}
 
+\paragraph{Localized $k$-NN Graph-SND in DiCo (Dispersion).}
+The fixed-$G$ interpretation is meant for settings where only \emph{local}
+heterogeneity matters. On VMAS Dispersion \citep{bettini2022vmas} at
+$n=10$ with Independent PPO, we compare three runs at the same
+$\SND_{\mathrm{des}}=0.1$: heterogeneity control disabled (pure IPPO,
+$\SND_{\mathrm{des}}=-1$), DiCo driven by full pairwise $\SND$, and
+DiCo driven by uniform-weight Graph-SND on a \emph{dynamic} symmetric
+$k$-nearest-neighbour graph ($k=3$) over agent $(x,y)$ positions, rebuilt
+each time the diversity subroutine runs.
+Figure~\ref{fig:knn-dispersion} reports mean reward versus iteration.
+The localized estimator tracks the full-$\SND$ trajectory at the reward
+level while, by construction, invoking the Wasserstein kernel only on
+$O(nk)$ neighbour edges per update rather than on all $\binom{n}{2}$
+pairs---the same interface full $\SND$ uses inside DiCo, but without the
+quadratic pair enumeration in the control loop.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\linewidth]{figures/neurips_knn_plot.pdf}
+\caption{\textbf{Downstream closed-loop diversity control on VMAS Dispersion}
+($n{=}10$, $\SND_{\mathrm{des}}{=}0.1$, Independent PPO).
+Localized $k$-NN Graph-SND ($k{=}3$) tracks the mean-reward trajectory of
+DiCo with full pairwise $\SND$, acting as a high-fidelity drop-in at the
+DiCo metric API while evaluating diversity only along sparse spatial
+neighbour edges---$O(nk)$ pairwise calls per update instead of
+$\binom{n}{2}$ for the full aggregator.}
+\label{fig:knn-dispersion}
+\end{figure}
+
 \subsection{Summary and limitations}
 \label{sec:experiments:summary}
 
@@ -940,13 +970,9 @@ and the scaling experiment at $n=100$ demonstrates that this speedup
 and the tracking fidelity of $\widehat{\SND}$ survive 500 iterations
 of active PPO training.
 
-We note three scope limits of these experiments. First, our core property validations range only up to $n=16$, with scaling demonstrated at $n=100$. This is large enough to make $\SND$'s quadratic cost visible but small enough that the quadratic cost remains tractable as a baseline. Validating Graph-SND at $n \gg 100$ is the natural next experiment but requires training infrastructure beyond what we use here. Second, we test only one scenario (Multi-Agent Goal Navigation).
-The mathematical content of the theorems is scenario-independent, so
-we expect the results to transfer, but a multi-scenario study is
-future work. Third, we do not yet test the localized-measure
-interpretation of $\SNDG$ on a task where the graph $G$ encodes a
-meaningful interaction structure; that is the natural follow-up
-experiment and we defer it to a separate paper.
+We note three scope limits of these experiments. First, our core property validations range only up to $n=16$, with scaling demonstrated at $n=100$. This is large enough to make $\SND$'s quadratic cost visible but small enough that the quadratic cost remains tractable as a baseline. Validating Graph-SND at $n \gg 100$ is the natural next experiment but requires training infrastructure beyond what we use here. Second, the controlled metric benchmarks use Multi-Agent Goal Navigation only; downstream DiCo pilots additionally use VMAS Dispersion (Figure~\ref{fig:knn-dispersion}), but the theorems are scenario-independent and a broad multi-scenario empirical study remains future work. Third, the localized $k$-NN Dispersion pilot is a single
+task and configuration; we do not yet characterize fixed-$G$ Graph-SND
+across tasks, graph designs, or $k$.
 
 % ============================================================
 \section{Discussion}
@@ -992,34 +1018,29 @@ per-update cost of evaluating the control target drops from
 $O(n^2)$ to $O(m)$ with $m$ tunable by the user. We expect the random-$G$ variant to be the more straightforward mechanical
 substitution; the fixed-$G$ variant raises design questions about how $G$
 should be chosen and whether it should be static or learned jointly with
-the policy. Section~\ref{sec:experiments:dico} already shows that the
-random-$G$ substitution composes cleanly in DiCo at one representative
-setting; broader sweeps over tasks, algorithms, and controller
-hyperparameters remain open.
+the policy. Section~\ref{sec:experiments:dico} shows that random-$G$
+Bernoulli Graph-SND composes cleanly in DiCo on Navigation and that a
+localized $k$-NN spatial graph composes on Dispersion at the reward
+level; broader sweeps over tasks, graph designs, algorithms, and
+controller hyperparameters remain open.
 
 \subsection*{Limitations}
 
 We flag five scope limits beyond those noted in the experimental summary (Section~\ref{sec:experiments:summary}). First, our core experiments range only up to $n = 16$, with a single scaling demonstration at $n=100$. This lower range is where full $\SND$ remains a tractable baseline, which is necessary for the recovery and unbiasedness validations, but validating $\SNDG$ at $n \gg 100$ is the natural next experiment; the limiting factor is MARL training infrastructure at scale, not the metric itself.
 
-Second, we test on a single scenario. Multi-Agent Goal Navigation is
-the scenario in which $\SND$ was originally validated by
-\citet{bettini2025snd}, so it is a natural starting point, but the
-full empirical case for $\SNDG$ requires showing that the recovery,
-unbiasedness, and concentration results hold across the dynamic tasks
-(Flocking in Wind) and diversity-control tasks (Differential
-Steering) from the original paper. We expect them to, because the
-results are scenario-independent at the mathematical level, but an
-empirical multi-scenario study is future work.
+Second, our primary controlled benchmarks use Multi-Agent Goal Navigation, the scenario in which $\SND$ was originally validated by
+\citet{bettini2025snd}. Downstream DiCo pilots add VMAS Dispersion
+(Figure~\ref{fig:knn-dispersion}), but the full empirical case for
+$\SNDG$ still requires recovery, unbiasedness, and concentration checks
+across additional tasks (e.g.\ Flocking in Wind, Differential Steering
+from the original SND paper). We expect transfer at the mathematical
+level, but a systematic multi-scenario study is future work.
 
-Third, we do not test the localized-measure interpretation of
-$\SNDG$ on a task where $G$ carries task-relevant structure. The
-recovery and sampling experiments use either $K_n$ or randomly
-sampled subgraphs, both of which treat $\SNDG$ as an approximation of
-$\SND$ rather than as a separate measure. The fixed-$G$
-interpretation's usefulness is a claim about semantics, not about
-computation, and testing it requires a task where local diversity and
-global diversity mean different things. This is a standalone
-empirical paper and we defer it.
+Third, the localized-measure story is supported only by the Dispersion
+$k$-NN pilot in Section~\ref{sec:experiments:dico}. The core recovery
+and sampling experiments still use $K_n$ or random Bernoulli subgraphs
+as approximations of $\SND$; general fixed or state-conditioned $G$
+across domains remains open.
 
 Fourth, all timings reported in Section~\ref{sec:experiments:timing}
 are CPU-only. On GPU, the cost profile changes materially: full
@@ -1030,10 +1051,11 @@ is large enough that the full pair set exceeds GPU memory, or when
 the metric must be evaluated inside a training loop at every PPO
 update, but a careful GPU study is deferred.
 
-Fifth, Section~\ref{sec:experiments:dico} reports one DiCo configuration
-(Independent PPO, one set point, one task). We do not claim optimality,
-stability across hyperparameters, or task-by-task robustness of the
-closed loop; exhaustive DiCo$+$Graph-SND studies remain future work.
+Fifth, Section~\ref{sec:experiments:dico} reports representative DiCo
+configurations (Independent PPO; Navigation at $n=16$; Dispersion at
+$n=10$; fixed $\SND_{\mathrm{des}}$). We do not claim optimality,
+stability across hyperparameters, or exhaustive task coverage; broad
+DiCo$+$Graph-SND studies remain future work.
 
 \subsection*{Future work}
 
@@ -1073,10 +1095,10 @@ as a separate theoretical contribution. We leave it as open.
 
 The fourth is extending the DiCo integration of
 Section~\ref{sec:experiments:dico} into a full controlled study: larger
-$n$, additional tasks and algorithms, sweeps over $\SND_{\mathrm{des}}$
-and $p$, and analysis of how Bernoulli sampling noise in
-$\widehat{\SND}(G_p)$ interacts with set-point regulation in DiCo
-\citep{bettini2024dico}.
+$n$, additional tasks and algorithms, sweeps over $\SND_{\mathrm{des}}$,
+$p$, and $k$ (or radius) in spatial graphs, and analysis of how Bernoulli
+sampling noise in $\widehat{\SND}(G_p)$ and $k$-NN graph variation
+interact with set-point regulation in DiCo \citep{bettini2024dico}.
 \section{Conclusion}
 \label{sec:conclusion}
 
@@ -1098,8 +1120,10 @@ noise, the concentration bound holds in every cell with room to spare
 (zero violations across 24{,}000 draws versus an allowed rate of
 $\delta = 0.1$), and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio at each inclusion probability $p$, and sustains a ${\sim}10\times$ speedup across 500 PPO iterations at $n=100$ while the sampling estimator tracks full \SND{} throughout.
 Section~\ref{sec:experiments:dico} shows the same substitution inside
-DiCo at $n=16$: reward and applied SND match the full metric while
-subroutine time drops.
+DiCo on Navigation at $n=16$ (reward and applied SND match the full
+metric while subroutine time drops) and a localized $k$-NN variant on
+Dispersion at $n=10$ that tracks full-$\SND$ mean reward at $O(nk)$
+edge evaluations per update.
 
 Graph-SND is a drop-in replacement for the aggregation step of SND.
 Any method that consumes SND as a scalar signal, including the DiCo
