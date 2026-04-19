@@ -142,7 +142,7 @@ def main() -> None:
     ax.set_xlabel("Iteration")
     ax.set_ylabel("Mean Reward")
     ax.legend(loc="best", fontsize=9)
-    ax.set_title("Kill-Shot 1: Reward Curves by Diversity Estimator")
+    ax.set_title("VMAS Dispersion: mean reward vs.\ iteration")
     fig.tight_layout()
 
     out = Path(args.output)

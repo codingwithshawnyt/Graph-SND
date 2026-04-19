@@ -176,7 +176,7 @@ def main() -> None:
     ax.set_xlabel("Number of Agents ($n$)")
     ax.set_ylabel("Peak VRAM (GB)")
     ax.set_title(
-        "Kill-Shot 2: Graph-SND Removes the $O(n^2)$ Memory Bottleneck"
+        r"Metric evaluation: peak VRAM vs.\ team size ($n$)"
     )
     ax.legend(loc="upper left", fontsize=9)
     ax.set_ylim(bottom=0)
