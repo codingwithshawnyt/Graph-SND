@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# NeurIPS final Dispersion runs.
+# NeurIPS final Dispersion runs -- single seed.
 #
 # Launches three IPPO runs on riddle's two RTX 4090s and pins each run's
 # Hydra output directory so the CSV lands exactly where the paper pipeline
 # expects it:
 #
-#   results/neurips_final/ippo/graph_snd_log.csv   <- IPPO baseline (desired_snd=-1)
-#   results/neurips_final/knn/graph_snd_log.csv    <- k-NN Graph-SND (k=3, desired_snd=0.1)
-#   results/neurips_final/full/graph_snd_log.csv   <- Full SND DiCo (desired_snd=0.1)
+#   results/neurips_final/seed${SEED}/ippo/graph_snd_log.csv   <- IPPO baseline (desired_snd=-1)
+#   results/neurips_final/seed${SEED}/knn/graph_snd_log.csv    <- k-NN Graph-SND (k=3, desired_snd=0.1)
+#   results/neurips_final/seed${SEED}/full/graph_snd_log.csv   <- Full SND DiCo (desired_snd=0.1)
 #
 # GPU assignments (hardcoded, no polling):
 #   Run A (IPPO baseline)     -> physical GPU 0
@@ -20,15 +20,19 @@
 # the same food. This is also the DiCo-validated task regime per
 # DIAGNOSIS.md Postmortem #2.
 #
-# Usage (from repo fork root):
-#   bash scripts/launch_knn_dico.sh
+# Usage (from repo fork root, one seed at a time):
+#   SEED=0 bash scripts/launch_knn_dico.sh
+#   SEED=1 bash scripts/launch_knn_dico.sh
+#   SEED=2 bash scripts/launch_knn_dico.sh
+#
+# Or use scripts/launch_knn_dico_seeds.sh to loop SEEDS sequentially.
 #
 # Override defaults:
-#   N_AGENTS=10 MAX_ITERS=167 DESIRED_SND=0.1 bash scripts/launch_knn_dico.sh
+#   SEED=1 N_AGENTS=10 MAX_ITERS=167 DESIRED_SND=0.1 bash scripts/launch_knn_dico.sh
 #
 # Force-clean pre-existing run dirs (otherwise the script refuses to
 # overwrite a populated target):
-#   FORCE=1 bash scripts/launch_knn_dico.sh
+#   FORCE=1 SEED=0 bash scripts/launch_knn_dico.sh
 
 set -euo pipefail
 
@@ -45,6 +49,7 @@ elif [[ -f "$ROOT/.venv/bin/activate" ]]; then
     source "$ROOT/.venv/bin/activate"
 fi
 
+SEED="${SEED:-0}"
 N_AGENTS="${N_AGENTS:-10}"
 MAX_ITERS="${MAX_ITERS:-167}"
 DESIRED_SND="${DESIRED_SND:-0.1}"
@@ -58,7 +63,8 @@ KNN_SUBSAMPLE_ENVS="${KNN_SUBSAMPLE_ENVS:-128}"
 FORCE="${FORCE:-0}"
 LOGGERS='experiment.loggers=[]'
 
-RESULTS_DIR="${ROOT}/results/neurips_final"
+RESULTS_BASE="${RESULTS_BASE:-${ROOT}/results/neurips_final}"
+RESULTS_DIR="${RESULTS_BASE}/seed${SEED}"
 IPPO_DIR="${RESULTS_DIR}/ippo"
 KNN_DIR="${RESULTS_DIR}/knn"
 FULL_DIR="${RESULTS_DIR}/full"
@@ -79,6 +85,7 @@ RUNNER=(python het_control/run_scripts/run_dispersion_ippo.py)
 
 HYDRA_COMMON=(
     "${LOGGERS}"
+    "seed=${SEED}"
     "task.n_agents=${N_AGENTS}"
     "task.n_food=${N_FOOD}"
     "task.share_reward=true"
@@ -89,6 +96,12 @@ HYDRA_COMMON=(
     "experiment.buffer_device=cpu"
 )
 
+IPPO_LOG="logs/neurips_final_seed${SEED}_ippo.log"
+KNN_LOG="logs/neurips_final_seed${SEED}_knn.log"
+FULL_LOG="logs/neurips_final_seed${SEED}_full.log"
+
+echo "[$(date -Is)] seed=${SEED} results_dir=${RESULTS_DIR}"
+
 # --- Run A: IPPO baseline (desired_snd=-1 -> scaling_ratio=1.0, pure IPPO) ---
 echo "[$(date -Is)] Starting IPPO baseline on physical GPU 0 -> ${IPPO_DIR}"
 CUDA_VISIBLE_DEVICES=0 nohup "${RUNNER[@]}" \
@@ -97,7 +110,7 @@ CUDA_VISIBLE_DEVICES=0 nohup "${RUNNER[@]}" \
     "model.desired_snd=-1" \
     "model.diversity_estimator=full" \
     "hydra.run.dir=${IPPO_DIR}" \
-    > "logs/neurips_final_ippo.log" 2>&1 &
+    > "${IPPO_LOG}" 2>&1 &
 PID_A=$!
 
 # --- Run C: k-NN Graph-SND DiCo (k=3, desired_snd=0.1) on GPU 1 ---
@@ -110,7 +123,7 @@ CUDA_VISIBLE_DEVICES=1 nohup "${RUNNER[@]}" \
     "model.diversity_knn_k=3" \
     "model.diversity_knn_subsample_envs=${KNN_SUBSAMPLE_ENVS}" \
     "hydra.run.dir=${KNN_DIR}" \
-    > "logs/neurips_final_knn.log" 2>&1 &
+    > "${KNN_LOG}" 2>&1 &
 PID_C=$!
 
 echo "[$(date -Is)] Spawned PID_A=$PID_A (GPU 0) PID_C=$PID_C (GPU 1); checking health..."
@@ -118,12 +131,12 @@ sleep 10
 
 if ! kill -0 "$PID_A" 2>/dev/null; then
     echo "[$(date -Is)] ERROR: IPPO baseline (PID_A) exited immediately. Tail:" >&2
-    tail -n 80 "logs/neurips_final_ippo.log" >&2 || true
+    tail -n 80 "${IPPO_LOG}" >&2 || true
     exit 1
 fi
 if ! kill -0 "$PID_C" 2>/dev/null; then
     echo "[$(date -Is)] ERROR: k-NN DiCo (PID_C) exited immediately. Tail:" >&2
-    tail -n 80 "logs/neurips_final_knn.log" >&2 || true
+    tail -n 80 "${KNN_LOG}" >&2 || true
     exit 1
 fi
 
@@ -139,7 +152,7 @@ CUDA_VISIBLE_DEVICES=0 nohup "${RUNNER[@]}" \
     "model.diversity_estimator=full" \
     "model.diversity_p=1.0" \
     "hydra.run.dir=${FULL_DIR}" \
-    > "logs/neurips_final_full.log" 2>&1 &
+    > "${FULL_LOG}" 2>&1 &
 PID_B=$!
 
 echo "[$(date -Is)] Waiting for remaining jobs PID_B=$PID_B PID_C=$PID_C ..."
@@ -147,14 +160,15 @@ wait "$PID_B" 2>/dev/null || true
 wait "$PID_C" 2>/dev/null || true
 
 echo
-echo "[$(date -Is)] All three runs finished. CSVs:"
+echo "[$(date -Is)] seed=${SEED} all three runs finished. CSVs:"
 echo "  IPPO baseline:   ${IPPO_DIR}/graph_snd_log.csv"
 echo "  k-NN Graph-SND:  ${KNN_DIR}/graph_snd_log.csv"
 echo "  Full SND DiCo:   ${FULL_DIR}/graph_snd_log.csv"
 echo
-echo "Plot with:"
+echo "When all seeds have finished (e.g. 0, 1, 2), plot the multi-seed figure with:"
 echo "  python ../scripts/plot_reward_curves.py \\"
-echo "      \"IPPO Baseline:${IPPO_DIR}/graph_snd_log.csv\" \\"
-echo "      \"k-NN Graph-SND:${KNN_DIR}/graph_snd_log.csv\" \\"
-echo "      \"Full SND:${FULL_DIR}/graph_snd_log.csv\" \\"
+echo "      --figure-type panels \\"
+echo "      \"ippo:${RESULTS_BASE}/seed0/ippo/graph_snd_log.csv,${RESULTS_BASE}/seed1/ippo/graph_snd_log.csv,${RESULTS_BASE}/seed2/ippo/graph_snd_log.csv\" \\"
+echo "      \"knn:${RESULTS_BASE}/seed0/knn/graph_snd_log.csv,${RESULTS_BASE}/seed1/knn/graph_snd_log.csv,${RESULTS_BASE}/seed2/knn/graph_snd_log.csv\" \\"
+echo "      \"full:${RESULTS_BASE}/seed0/full/graph_snd_log.csv,${RESULTS_BASE}/seed1/full/graph_snd_log.csv,${RESULTS_BASE}/seed2/full/graph_snd_log.csv\" \\"
 echo "      --output ${ROOT}/../Paper/figures/neurips_knn_plot.pdf"

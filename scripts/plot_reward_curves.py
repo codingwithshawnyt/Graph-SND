@@ -1,30 +1,35 @@
-"""Plot reward curves from Graph-SND DiCo CSV logs.
+"""Plot reward / applied-SND / metric-time curves from Graph-SND DiCo CSV logs.
 
 Reads one or more ``graph_snd_log.csv`` files (produced by
 :class:`GraphSNDLoggingCallback`), groups them by estimator, and plots
-reward-mean vs iteration with confidence bands (if multiple seeds are
-provided for the same estimator).
+either a single reward-vs-iteration panel or a 3-panel publication
+figure (reward, applied SND, metric wall-clock).
 
-Usage:
+Usage::
+
+    # Single-panel reward-only (backward-compatible default)
     python scripts/plot_reward_curves.py \
         ippo:outputs/ippo/graph_snd_log.csv \
         knn:outputs/knn/graph_snd_log.csv \
         full:outputs/full/graph_snd_log.csv \
         --output Paper/figures/neurips_knn_plot.pdf
 
-    # Multiple seeds per estimator:
+    # Multi-seed, 3-panel publication figure
     python scripts/plot_reward_curves.py \
-        "ippo:outputs/seed0_ippo/log.csv,outputs/seed1_ippo/log.csv" \
-        "full:outputs/seed0_full/log.csv,outputs/seed1_full/log.csv" \
-        --output figures/reward_curves.pdf
+        --figure-type panels \
+        "ippo:r/seed0/ippo/log.csv,r/seed1/ippo/log.csv,r/seed2/ippo/log.csv" \
+        "knn:r/seed0/knn/log.csv,r/seed1/knn/log.csv,r/seed2/knn/log.csv" \
+        "full:r/seed0/full/log.csv,r/seed1/full/log.csv,r/seed2/full/log.csv" \
+        --output Paper/figures/neurips_knn_plot.pdf
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import math
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -46,6 +51,15 @@ LABEL_MAP = {
     "knn": "k-NN Graph-SND",
 }
 
+# Fixed palette so independent plots stay visually consistent across the paper.
+COLOR_MAP = {
+    "ippo": "#1f77b4",
+    "knn":  "#ff7f0e",
+    "full": "#2ca02c",
+    "graph_p01": "#d62728",
+    "graph_p025": "#9467bd",
+}
+
 
 def _load_csv(path: str) -> List[Dict[str, str]]:
     rows: List[Dict[str, str]] = []
@@ -56,26 +70,132 @@ def _load_csv(path: str) -> List[Dict[str, str]]:
     return rows
 
 
+def _safe_float(x: Optional[str]) -> float:
+    if x is None or x == "":
+        return float("nan")
+    try:
+        return float(x)
+    except ValueError:
+        return float("nan")
+
+
 def _parse_series(
     csv_paths: List[str],
-) -> Tuple[np.ndarray, np.ndarray]:
-    iters_list: List[List[float]] = []
-    rewards_list: List[List[float]] = []
+    columns: Tuple[str, ...],
+) -> Tuple[np.ndarray, Dict[str, np.ndarray]]:
+    """Return (iters[min_len], {col: array(n_seeds, min_len) or None}).
+
+    Values missing from the CSV for a given column yield ``None`` so callers
+    can skip the corresponding panel.
+    """
+    per_seed_iters: List[List[float]] = []
+    per_seed_cols: Dict[str, List[List[float]]] = {c: [] for c in columns}
+    missing_cols: Dict[str, bool] = {c: False for c in columns}
+
     for path in csv_paths:
         rows = _load_csv(path)
-        iters_list.append([float(r.get("iter", 0)) for r in rows])
-        rewards_list.append([float(r.get("reward_mean", float("nan"))) for r in rows])
-    min_len = min(len(x) for x in iters_list)
+        per_seed_iters.append([_safe_float(r.get("iter", "0")) for r in rows])
+        for c in columns:
+            if rows and c not in rows[0]:
+                missing_cols[c] = True
+                per_seed_cols[c].append([float("nan")] * len(rows))
+            else:
+                per_seed_cols[c].append([_safe_float(r.get(c, "")) for r in rows])
+
+    if not per_seed_iters:
+        return np.array([]), {c: None for c in columns}
+
+    min_len = min(len(x) for x in per_seed_iters)
     if min_len == 0:
-        return np.array([]), np.array([])
-    iters = np.array(iters_list[0][:min_len])
-    rewards = np.array([r[:min_len] for r in rewards_list])
-    return iters, rewards
+        return np.array([]), {c: None for c in columns}
+
+    iters = np.array(per_seed_iters[0][:min_len])
+    out: Dict[str, np.ndarray] = {}
+    for c in columns:
+        if missing_cols[c]:
+            out[c] = None
+            continue
+        out[c] = np.array([seed_col[:min_len] for seed_col in per_seed_cols[c]])
+    return iters, out
+
+
+def _smooth(arr: np.ndarray, window: int) -> np.ndarray:
+    if window <= 1 or arr.size < window:
+        return arr
+    kernel = np.ones(window) / window
+    return np.convolve(arr, kernel, mode="valid")
+
+
+def _aggregate(
+    data: np.ndarray,
+    smooth: int,
+) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    """Return (mean, std-or-None) over the leading seed axis after smoothing."""
+    if data.ndim == 1:
+        mean = _smooth(data, smooth)
+        return mean, None
+    mean = np.nanmean(data, axis=0)
+    std = np.nanstd(data, axis=0)
+    mean = _smooth(mean, smooth)
+    std = _smooth(std, smooth)
+    return mean, std
+
+
+def _plot_panel(
+    ax,
+    all_data: Dict[str, Tuple[np.ndarray, np.ndarray]],
+    column: str,
+    ylabel: str,
+    title: str,
+    smooth: int,
+    log_y: bool = False,
+    hline: Optional[float] = None,
+    hline_label: Optional[str] = None,
+) -> bool:
+    """Draw one panel. Returns True if anything was plotted."""
+    any_drawn = False
+    for label, (iters, data_by_col) in all_data.items():
+        raw = data_by_col.get(column)
+        if raw is None:
+            continue
+        mean, std = _aggregate(raw, smooth)
+        iters_plot = iters[: len(mean)]
+        display_label = LABEL_MAP.get(label, label)
+        color = COLOR_MAP.get(label)
+        ax.plot(iters_plot, mean, label=display_label, linewidth=1.6, color=color)
+        if std is not None:
+            ax.fill_between(
+                iters_plot,
+                mean - std,
+                mean + std,
+                alpha=0.18,
+                color=color,
+                linewidth=0,
+            )
+        any_drawn = True
+
+    if hline is not None:
+        ax.axhline(
+            hline,
+            linestyle="--",
+            color="gray",
+            alpha=0.7,
+            linewidth=1.0,
+            label=hline_label,
+        )
+
+    if log_y:
+        ax.set_yscale("log")
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(alpha=0.3)
+    return any_drawn
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Plot reward curves from Graph-SND DiCo CSV logs."
+        description="Plot Graph-SND DiCo training curves (single- or multi-seed)."
     )
     parser.add_argument(
         "series",
@@ -95,59 +215,130 @@ def main() -> None:
         default=1,
         help="Rolling-mean window for smoothing (1 = no smoothing).",
     )
+    parser.add_argument(
+        "--figure-type",
+        choices=("reward", "panels"),
+        default="reward",
+        help=(
+            "'reward' (default, backward-compatible): single reward-vs-iter "
+            "panel. 'panels': 3-panel publication figure with reward, applied "
+            "SND (vs desired), and metric wall-clock per call."
+        ),
+    )
+    parser.add_argument(
+        "--task-name",
+        type=str,
+        default="VMAS Dispersion",
+        help="Task name used in panel titles.",
+    )
+    parser.add_argument(
+        "--desired-snd",
+        type=float,
+        default=0.1,
+        help="Desired SND reference line on the applied-SND panel.",
+    )
     args = parser.parse_args()
 
-    all_data: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
+    columns = ("reward_mean", "applied_snd", "metric_time_ms")
+    all_data: Dict[str, Tuple[np.ndarray, Dict[str, np.ndarray]]] = {}
     for spec in args.series:
         label, paths_str = spec.split(":", 1)
-        paths = [p.strip() for p in paths_str.split(",")]
-        iters, rewards = _parse_series(paths)
+        paths = [p.strip() for p in paths_str.split(",") if p.strip()]
+        iters, cols = _parse_series(paths, columns)
         if iters.size == 0:
             print(f"WARNING: no data for {label!r}, skipping.")
             continue
-        all_data[label] = (iters, rewards)
+        all_data[label] = (iters, cols)
 
     if not all_data:
         raise SystemExit("No data loaded. Check your CSV paths.")
 
-    fig, ax = plt.subplots(figsize=(7, 4))
-
-    for label, (iters, rewards) in all_data.items():
-        display_label = LABEL_MAP.get(label, label)
-        if rewards.ndim == 1:
-            mean = rewards
-            std = None
-        else:
-            mean = np.nanmean(rewards, axis=0)
-            std = np.nanstd(rewards, axis=0)
-
-        if args.smooth > 1 and len(mean) >= args.smooth:
-            kernel = np.ones(args.smooth) / args.smooth
-            mean = np.convolve(mean, kernel, mode="valid")
-            iters_plot = iters[: len(mean)]
-            if std is not None:
-                std = np.convolve(std, kernel, mode="valid")
-        else:
-            iters_plot = iters
-
-        ax.plot(iters_plot, mean, label=display_label, linewidth=1.5)
-        if std is not None:
-            ax.fill_between(
-                iters_plot,
-                mean - std,
-                mean + std,
-                alpha=0.2,
-            )
-
-    ax.set_xlabel("Iteration")
-    ax.set_ylabel("Mean reward (per step)")
-    ax.legend(loc="best", fontsize=9)
-    ax.set_title("VMAS Dispersion: mean reward vs. iteration")
-    fig.tight_layout()
-
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out, dpi=150)
+
+    if args.figure_type == "reward":
+        fig, ax = plt.subplots(figsize=(7, 4))
+        _plot_panel(
+            ax,
+            all_data,
+            column="reward_mean",
+            ylabel="Mean reward (per step)",
+            title=f"{args.task_name}: mean reward vs. iteration",
+            smooth=args.smooth,
+        )
+        ax.legend(loc="best", fontsize=9)
+        fig.tight_layout()
+        fig.savefig(out, dpi=150)
+        print(f"Saved: {out}")
+        return
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 4.2))
+
+    _plot_panel(
+        axes[0],
+        all_data,
+        column="reward_mean",
+        ylabel="Mean reward (per step)",
+        title=f"{args.task_name}: mean reward",
+        smooth=args.smooth,
+    )
+
+    drew_applied = _plot_panel(
+        axes[1],
+        all_data,
+        column="applied_snd",
+        ylabel=r"Applied $\mathrm{SND}$",
+        title=rf"Applied SND tracking ($\mathrm{{SND}}_{{\mathrm{{des}}}}{{=}}{args.desired_snd:g}$)",
+        smooth=args.smooth,
+        hline=args.desired_snd,
+        hline_label=r"$\mathrm{SND}_{\mathrm{des}}$",
+    )
+    if not drew_applied:
+        axes[1].text(
+            0.5, 0.5,
+            "applied_snd not present in logs",
+            ha="center", va="center",
+            transform=axes[1].transAxes, fontsize=9, color="gray",
+        )
+        axes[1].set_axis_off()
+
+    drew_time = _plot_panel(
+        axes[2],
+        all_data,
+        column="metric_time_ms",
+        ylabel="Metric wall-clock per call (ms)",
+        title="Per-call diversity cost",
+        smooth=args.smooth,
+        log_y=True,
+    )
+    if not drew_time:
+        axes[2].text(
+            0.5, 0.5,
+            "metric_time_ms not present in logs",
+            ha="center", va="center",
+            transform=axes[2].transAxes, fontsize=9, color="gray",
+        )
+        axes[2].set_axis_off()
+
+    # Single shared legend above the panels to avoid duplication.
+    handles, labels = axes[0].get_legend_handles_labels()
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            loc="upper center",
+            ncol=min(len(labels), 5),
+            frameon=False,
+            bbox_to_anchor=(0.5, 1.02),
+            fontsize=9,
+        )
+        for ax in axes:
+            leg = ax.get_legend()
+            if leg is not None:
+                leg.remove()
+
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
+    fig.savefig(out, dpi=150, bbox_inches="tight")
     print(f"Saved: {out}")
 
 
