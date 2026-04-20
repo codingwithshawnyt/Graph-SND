@@ -89,7 +89,8 @@ wandb/
 # if needed).
 ControllingBehavioralDiversity-fork/*.pdf
 # DiCo fork's own experiment outputs (mirror of upstream Hydra behaviour).
-ControllingBehavioralDiversity-fork/results/
+ControllingBehavioralDiversity-fork/results/*
+!ControllingBehavioralDiversity-fork/results/neurips_final_n50/
 ControllingBehavioralDiversity-fork/outputs/
 
 # ---------- Jupyter ----------
