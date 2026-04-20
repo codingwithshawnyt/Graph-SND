@@ -217,14 +217,25 @@ def _plot_panel(
     ax.set_title(title)
     ax.grid(alpha=0.3)
 
-    if annotate_speedup and "knn" in per_series_medians and "full" in per_series_medians:
-        k = per_series_medians["knn"]
+    if annotate_speedup and "full" in per_series_medians:
         f = per_series_medians["full"]
-        if k > 0 and f > 0:
-            ratio = f / k
+        ratio_labels = {
+            "knn":        r"k\text{-}NN",
+            "graph_p01":  r"p{=}0.1",
+            "graph_p025": r"p{=}0.25",
+        }
+        ratio_lines: list[str] = []
+        for key, tex_name in ratio_labels.items():
+            if key in per_series_medians:
+                v = per_series_medians[key]
+                if v > 0 and f > 0:
+                    ratio_lines.append(
+                        rf"$\mathrm{{median\ full/{tex_name}}} = {f / v:.2f}\times$"
+                    )
+        if ratio_lines:
             ax.text(
                 0.97, 0.97,
-                rf"$\mathrm{{median\ full/k\text{{-}}NN}} = {ratio:.2f}\times$",
+                "\n".join(ratio_lines),
                 transform=ax.transAxes,
                 ha="right", va="top",
                 fontsize=9,

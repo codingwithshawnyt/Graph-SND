@@ -610,15 +610,19 @@ scale; the CPU sub-sweep reaches $10$--$17\times$ at small $n$ due to
 vectorisation overhead in the small regime, and monotonically
 collapses to $1\times$ as $p\to 1$ (where $G_p = K_n$)---consistent
 with $\binom{n}{2}/\E[|E(G_p)|] = 1/p$.
-Tracking fidelity at scale is inherited from
-Theorem~\ref{thm:concentration}: Bernoulli sampling at $n{=}500$,
-$p{=}0.1$ draws $m\!\approx\!12{,}475$ edges ($2.5\times$ more than
-at $n{=}100$, $p{=}0.1$), tightening the concentration radius of
-Eq.~\eqref{eq:concentration} by a factor
+Tracking fidelity at $n{=}500$ is a \emph{theoretical} extrapolation
+from the directly-verified $n{=}100$ overlap: the concentration
+radius of Eq.~\eqref{eq:concentration} is controlled by the edge
+sample size $m$, and Bernoulli sampling at $n{=}500$, $p{=}0.1$
+draws $m\!\approx\!12{,}475$ edges ($2.5\times$ more than at
+$n{=}100$, $p{=}0.1$), tightening the bound by a factor
 $\sqrt{12{,}475/495}\!\approx\!5.0$ relative to
 Section~\ref{sec:experiments:scaling}, where the two curves already
-overlap at every logged iteration. Full CPU timing curves and
-absolute wall-clock values at all $(n, p)$ cells appear in
+overlap at every logged iteration. We verify this overlap directly
+at $n{=}100$ and rely on Theorem~\ref{thm:concentration} to
+extrapolate at $n{=}500$; an end-to-end $n{=}500$ training run is
+left to future work. Full CPU timing curves and absolute wall-clock
+values at all $(n, p)$ cells appear in
 Appendix~\ref{app:verify} (Figure~\ref{fig:timing}).
 
 \begin{figure}[t]
@@ -766,12 +770,15 @@ variants outperform the diversity-off baseline; both sparse Graph-SND
 variants are within seed variance of full $\SND$. Panel~2: all
 controlled runs track $\SND_{\mathrm{des}}{=}0.1$ to within $10^{-3}$.
 Panel~3: median per-call cost is lowest for Bernoulli-$0.1$, then
-$k$-NN, then full $\SND$, matching the expected pair-count ordering.
-The $k$-NN IQR band widens intermittently: $k$-NN graph construction on the
-$128$-env subsample exhibits occasional CUDA-synchronization tail
-events (visible as sparse spikes on the orange $80$th percentile),
-but the worst-case per-call cost remains bounded by the full-$\SND$
-cost plus a constant $k$-NN construction overhead.}
+$k$-NN, then full $\SND$, matching the expected pair-count ordering;
+the annotation reports both median speedups over full $\SND$. Both
+sparse variants exhibit sparse IQR widening from CUDA-sync tail
+events: the $k$-NN band reflects occasional graph-construction
+spikes on the $128$-env subsample, while the Bernoulli-$0.1$ band
+reflects per-call sampling-mask variance. In both cases the
+worst-case per-call cost remains bounded by the full-$\SND$ cost
+plus a constant overhead (graph construction for $k$-NN,
+mask+$1/p$ reweighting for Bernoulli-$0.1$).}
 \label{fig:dico-dispersion-knn}
 \end{figure}
 

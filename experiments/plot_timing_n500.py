@@ -54,7 +54,7 @@ def _filter_n500(df_exp2: pd.DataFrame, target_n: int) -> pd.DataFrame:
 
 def _scaling_at_p01_from_exp1(df: pd.DataFrame) -> pd.DataFrame:
     sub = df[np.isclose(df["p"], 0.1)][["n", "speedup"]].copy()
-    sub["regime"] = "CPU, frozen-ckpt (Sec. 6.5)"
+    sub["regime"] = "CPU, frozen-ckpt (App. C)"
     return sub
 
 
@@ -68,7 +68,7 @@ def _scaling_at_p01_from_n100(df: pd.DataFrame) -> Optional[pd.DataFrame]:
         .median()
         .sort_values("n")
     )
-    sub["regime"] = "GPU, online training (Sec. 6.6)"
+    sub["regime"] = "GPU, online training (Sec. 6.4)"
     return sub
 
 
@@ -146,8 +146,8 @@ def plot(
             "no data at p=0.1 across exp1/n100/exp2 CSVs; cannot draw scaling panel"
         )
     regime_styles = {
-        "CPU, frozen-ckpt (Sec. 6.5)": {"marker": "o", "color": "#d62728"},
-        "GPU, online training (Sec. 6.6)": {"marker": "s", "color": "#ff7f0e"},
+        "CPU, frozen-ckpt (App. C)": {"marker": "o", "color": "#d62728"},
+        "GPU, online training (Sec. 6.4)": {"marker": "s", "color": "#ff7f0e"},
         "GPU, frozen-init (this work)": {"marker": "D", "color": "#1f77b4"},
     }
     for piece in pieces:
@@ -170,7 +170,7 @@ def plot(
     ax_n.set_xlabel(r"team size $n$")
     ax_n.set_ylabel(r"wall-clock speedup at $p{=}0.1$")
     ax_n.set_title(
-        r"Speedup at $p{=}0.1$ across scale: $n{\in}\{4, 8, 16, 100, 500\}$"
+        r"Speedup at $p{=}0.1$ across scale: $n{\in}\{4, 8, 16, 100, 250, 500\}$"
     )
     ax_n.grid(alpha=0.3, which="both")
 
