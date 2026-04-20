@@ -78,7 +78,7 @@ estimator of full SND, with a Hoeffding-type concentration bound yielding
 $O(1/\sqrt{m})$ error in the number of sampled edges $m$, independent of $n$.
 We prove six formal properties, recovery, non-negativity,
 graph-automorphism invariance, complexity reduction, unbiasedness, and
-concentration, and verify them experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$; we further evaluate DiCo with Graph-SND on VMAS Dispersion with shared reward ($n{=}10$). Recovery is numerically exact, the estimator is unbiased to within expected sampling noise, concentration bounds hold with zero violations across 24{,}000 draws, and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio, sustaining a ${\sim}\!10\times$ speedup during active PPO training at $n=100$, with the sampling estimator tracking full $\SND$ indistinguishably throughout. On Dispersion, a dynamic $k$-nearest-neighbor graph ($k{=}3$) substituted into DiCo tracks the same $\SND_{\mathrm{des}}{=}0.1$ set point as full pairwise $\SND$ to within $10^{-3}$, matches or exceeds its learning curve across three seeds, and reduces median per-call diversity-metric wall-clock cost by ${\approx}2.16\times$ (Figure~\ref{fig:dico-dispersion-knn}).
+concentration, and verify them experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$; we further evaluate DiCo with Graph-SND on VMAS Dispersion with shared reward ($n{=}10$). Recovery is numerically exact, the estimator is unbiased to within expected sampling noise, concentration bounds hold with zero violations across 24{,}000 draws, and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio, sustaining a ${\sim}\!10\times$ speedup during active PPO training at $n=100$, with the sampling estimator tracking full $\SND$ indistinguishably throughout. On Dispersion, a dynamic $k$-nearest-neighbor graph ($k{=}3$) substituted into DiCo tracks the same $\SND_{\mathrm{des}}{=}0.1$ set point as full pairwise $\SND$ to within $10^{-3}$, matches its learning curve within seed variance across three seeds, and reduces median per-call diversity-metric wall-clock cost by ${\approx}2.16\times$ (Figure~\ref{fig:dico-dispersion-knn}).
 \end{abstract}
 % ============================================================
 \section{Introduction}
@@ -165,7 +165,7 @@ Theorem~\ref{thm:concentration}, (iii) that sparse Graph-SND
   substantially reduced cost, and (iv) that a $k$-NN localized Graph-SND,
   substituted into the DiCo closed loop on VMAS Dispersion
   ($n{=}10$, three seeds), tracks the same $\SND_{\mathrm{des}}$ set point
-  as full pairwise $\SND$, matches or exceeds its learning curve, and
+  as full pairwise $\SND$, matches its learning curve within seed variance, and
   reduces median per-call metric wall-clock cost by ${\approx}2\times$
   (Section~\ref{sec:experiments:dico-dispersion}).
 \end{enumerate}
@@ -266,6 +266,30 @@ that is consistent with the interaction structure used by the policy
 itself. When no such graph exists, $G$ can be constructed from
 spatial or behavioral proximity, or sampled for the purpose of
 estimation.
+
+\paragraph{Subgroup partitioning (Bettini et al., 2025, \S 6).} A
+natural alternative to graph-based aggregation is the
+subgroup-partition approach \citet[\S 6]{bettini2025snd} suggest as
+an open direction: partition $\Agents = C_1 \sqcup \cdots \sqcup
+C_K$, compute $\SND|_{C_k}$ on each cluster independently, and
+aggregate the resulting scalars (e.g., by averaging them). Graph-SND
+is strictly more general: a partition induces a block-diagonal graph
+$G_{\text{part}} = \bigsqcup_k K_{|C_k|}$ (a disjoint union of
+within-cluster cliques), and any two subgroup-aggregation rules that
+weight clusters uniformly are recovered by choosing this $G$ with
+appropriate edge weights; conversely, Graph-SND also expresses graphs
+that are \emph{not} block-diagonal ($k$-NN, communication topologies,
+Bernoulli samples), which no partition can represent. Beyond
+expressiveness, two formal properties in this paper require the
+edge-level aggregation and fail under partition-plus-scalar-average:
+the complete-graph recovery of Proposition~\ref{prop:recovery}
+($\SNDG$ on $K_n$ equals $\SND$ \emph{exactly}) and the unbiasedness
+of Proposition~\ref{prop:unbiased} (the HT estimator over a Bernoulli
+subgraph is unbiased for $\SND$; a within-cluster Bernoulli sample
+then averaged across clusters is not). The two approaches therefore
+describe different design choices, and we do not benchmark against
+a partition baseline because the partition setting is formally a
+special case.
 
 \subsection{Sampling-based approximations and finite-population
 concentration}
@@ -809,6 +833,16 @@ Every 25 PPO iterations we logged both $\SND(\mathbf{D})$ (over all
 $\binom{100}{2} = 4{,}950$ pairs) and
 $\widehat{\SND}(G_{0.1})$ (over one Bernoulli-$0.1$ subsample) on the
 current rollout batch, together with the wall-clock cost of each.
+All $t_{\mathrm{full}}$ and $t_{\mathrm{sample}}$ timings reported in
+Table~\ref{tab:scaling-n100} and Figure~\ref{fig:scaling-n100} are
+GPU-measured on the same RTX~4090 used for training, with
+\texttt{torch.cuda.synchronize} called on both sides of each
+\texttt{time.perf\_counter} measurement so that the reported wall
+clock reflects kernel execution rather than asynchronous launch
+latency; this is a stricter timing regime than the CPU-only frozen-
+checkpoint benchmark of Section~\ref{sec:experiments:timing}, and
+tests whether the $\binom{n}{2}/|E|$ speedup also survives on GPU at
+scale.
 
 \paragraph{Results.} Figure~\ref{fig:scaling-n100} shows both
 $\SND(\mathbf{D})$ and $\widehat{\SND}(G_{0.1})$ across 500 PPO
@@ -948,6 +982,23 @@ even at modest $n$ (timing panel). We report a single set point and a
 single task; broader sweeps are discussed in
 Section~\ref{sec:experiments:summary}.
 
+The absolute per-call times reported here are \emph{GPU}-measured
+inside the DiCo training loop (CUDA synchronize on both sides of
+each call, same physical RTX~4090 as training), at the PPO rollout
+batch shape of the minibatched forward pass, and therefore have a
+different absolute magnitude than the frozen-checkpoint CPU timings
+of Section~\ref{sec:experiments:timing}
+(Figure~\ref{fig:timing}, $\approx 100\,\text{ms}$ at $n{=}16$) and
+the in-training GPU timings of Section~\ref{sec:experiments:scaling}
+(Table~\ref{tab:scaling-n100}, $\approx 1.2\,\text{s}$ at $n{=}100$
+over the full rollout batch). The cross-section comparison is
+qualitative: the common structure across all three is the
+$\binom{n}{2}/|E|$ ratio predicted by
+Proposition~\ref{prop:complexity}; the section-to-section absolute
+times reflect different hardware, different batch shapes, and
+whether the metric is called once per frozen checkpoint,
+periodically during training, or every DiCo minibatch.
+
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.98\linewidth]{figures/neurips_knn_plot.pdf}
@@ -961,12 +1012,20 @@ Lines are mean over seeds; bands are mean~$\pm$~std for reward
 (Panel~1) and applied SND (Panel~2), and median with IQR for per-call
 metric cost (Panel~3)---timing data is right-skewed, so median/IQR is
 robust to sparse CUDA-sync tail events. Panel~1: both DiCo variants
-match or exceed the diversity-off baseline in terminal reward.
+outperform the diversity-off baseline in terminal reward ($k$-NN and
+full $\SND$ are within seed variance of each other).
 Panel~2: both controlled runs track $\SND_{\mathrm{des}}{=}0.1$ to
 within $10^{-3}$. Panel~3: $k$-NN Graph-SND reduces median per-call
 metric cost by ${\approx}2.16\times$ relative to full $\SND$,
 consistent with Proposition~\ref{prop:complexity} and the per-call
-constant-factor savings of the localized computation.}
+constant-factor savings of the localized computation. The $k$-NN
+IQR band widens intermittently: $k$-NN graph construction on the
+$128$-env subsample exhibits occasional CUDA-synchronization tail
+events (visible as sparse spikes on the orange $80$th percentile),
+but the worst-case per-call cost remains bounded by the full-$\SND$
+cost plus a constant $k$-NN construction overhead, so the worst-case
+tail is never slower than the green baseline by more than a constant
+factor.}
 \label{fig:dico-dispersion-knn}
 \end{figure}
 
@@ -1044,7 +1103,7 @@ and controller hyperparameters remain open.
 
 \subsection*{Limitations}
 
-We flag five scope limits beyond those noted in the experimental summary (Section~\ref{sec:experiments:summary}). First, our core experiments range only up to $n = 16$, with a single scaling demonstration at $n=100$. This lower range is where full $\SND$ remains a tractable baseline, which is necessary for the recovery and unbiasedness validations, but validating $\SNDG$ at $n \gg 100$ is the natural next experiment; the limiting factor is MARL training infrastructure at scale, not the metric itself.
+We flag seven scope limits beyond those noted in the experimental summary (Section~\ref{sec:experiments:summary}). First, our core experiments range only up to $n = 16$, with a single scaling demonstration at $n=100$. This lower range is where full $\SND$ remains a tractable baseline, which is necessary for the recovery and unbiasedness validations, but validating $\SNDG$ at $n \gg 100$ is the natural next experiment; the limiting factor is MARL training infrastructure at scale, not the metric itself.
 
 Second, the controlled metric experiments use only Multi-Agent Goal
 Navigation, the scenario in which $\SND$ was originally validated by
@@ -1062,20 +1121,52 @@ separate from the control loop.  Broader fixed-$G$ studies---graphs
 derived from communication topology, spatial proximity, or learned
 attention---remain future work.
 
-Fourth, all timings reported in Section~\ref{sec:experiments:timing}
-are CPU-only. On GPU, the cost profile changes materially: full
-$\SND$ parallelizes well across pairs, and the $\binom{n}{2}/|E|$
-speedup ratio of Proposition~\ref{prop:complexity} may shrink when
-the full pairwise computation fits comfortably in a single GPU kernel. At $n = 16$, the full pair set is only 120 evaluations, well within the capacity of a single kernel; the regime where GPU parallelism saturates likely begins around $n \geq 50$--$100$. We expect $\SNDG$ to retain a wall-clock advantage when $n$
-is large enough that the full pair set exceeds GPU memory, or when
-the metric must be evaluated inside a training loop at every PPO
-update, but a careful GPU study is deferred.
+Fourth, absolute timings across experiments span three hardware/call
+regimes: Section~\ref{sec:experiments:timing}
+(Figure~\ref{fig:timing}) is CPU-only and frozen-checkpoint,
+Section~\ref{sec:experiments:scaling}
+(Table~\ref{tab:scaling-n100}) is GPU-measured and logged every 25
+PPO iterations over the full rollout batch at $n{=}100$, and
+Section~\ref{sec:experiments:dico-dispersion}
+(Figure~\ref{fig:dico-dispersion-knn}) is GPU-measured at every DiCo
+minibatch forward at $n{=}10$. On GPU at small $n$ the
+$\binom{n}{2}/|E|$ ratio can be partly absorbed by the fact that
+full $\SND$ fits in a single CUDA kernel; at $n=16$ the full pair
+set is only 120 evaluations, and the regime where GPU parallelism
+saturates begins around $n \geq 50$--$100$. The n=100 scaling
+experiment already demonstrates the predicted ${\sim}10\times$
+speedup survives on GPU at that scale; a systematic GPU sweep across
+$n$ and $p$ under matched call patterns is deferred.
 
 Fifth, Section~\ref{sec:experiments:dico-dispersion} reports a single
 DiCo configuration (Independent PPO, $\SND_{\mathrm{des}}{=}0.1$, three
 seeds on VMAS Dispersion). We do not claim optimality, stability across
 hyperparameters, or task-by-task robustness of the closed loop;
 exhaustive DiCo$+$Graph-SND studies remain future work.
+
+Sixth, the hierarchical construction of
+Section~\ref{sec:method:hierarchical} (Equation~\ref{eq:hsnd}) is
+presented for conceptual completeness---multi-scale behavioral
+structure is a natural long-run extension of graph-level
+aggregation---but is not exercised empirically in this paper. No
+proposition or theorem in Section~\ref{sec:theory} depends on the
+hierarchical form, and no experiment uses $\SNDG^h$ with $K>1$
+clusters. We defer empirical validation of
+hierarchical Graph-SND (e.g., aggregation consistency under cluster
+refinement, and within- versus between-cluster diversity tracking)
+to future work.
+
+Seventh, every RL result in this paper uses Independent PPO, both
+for the frozen-checkpoint benchmarks
+(Sections~\ref{sec:experiments:recovery}--\ref{sec:experiments:scaling})
+and for the DiCo closed-loop experiment
+(Section~\ref{sec:experiments:dico-dispersion}). The DiCo framework
+of \citet{bettini2024dico} is originally validated under multiple
+policy-gradient and actor-critic algorithms, including centralized-critic
+variants; demonstrating that Graph-SND composes cleanly with those
+other algorithms---e.g., stability of a centralized critic under a
+noisy random-$G$ estimate---is a straightforward extension that we
+leave as future work.
 
 \subsection*{Future work}
 
@@ -1143,7 +1234,7 @@ $\delta = 0.1$), and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$
 Section~\ref{sec:experiments:dico-dispersion} shows the same pattern
 inside DiCo on Dispersion at $n{=}10$: $k$-NN Graph-SND tracks the
 same $\SND_{\mathrm{des}}$ set point as full pairwise $\SND$ to within
-$10^{-3}$, matches or exceeds its learning curve across three seeds,
+$10^{-3}$, matches its learning curve within seed variance across three seeds,
 and reduces median per-call metric wall-clock cost by ${\approx}2\times$.
 
 Graph-SND is a drop-in replacement for the aggregation step of SND.
