@@ -243,9 +243,35 @@ bash scripts/launch_dico_n50_feasibility.sh
 #   results/neurips_final_n50/seed0/bern/graph_snd_log.csv
 ```
 
-Then from the local repo root, `rsync` the two CSVs into
-`ControllingBehavioralDiversity-fork/results/neurips_final_n50/...`
-and regenerate the appendix companion figure:
+Then from the **local** repo root, copy the two CSVs. **Do not** rsync
+both remote paths into one flat directory: each run is named
+`graph_snd_log.csv`, so the second transfer would overwrite the
+first. Create `ippo/` and `bern/` and pull each file separately
+(replace `HOST` and the remote home path if riddle differs):
+
+```bash
+cd ~/Documents/Research/Graph-SND
+mkdir -p ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/ippo \
+         ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/bern
+
+rsync -avz shawnr@HOST:~/shawnr/Graph-SND/ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/ippo/graph_snd_log.csv \
+  ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/ippo/
+
+rsync -avz shawnr@HOST:~/shawnr/Graph-SND/ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/bern/graph_snd_log.csv \
+  ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/bern/
+```
+
+If you already ran a bad rsync, remove any stray
+`ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/graph_snd_log.csv`
+(single file directly under `seed0/`) and re-run the two commands
+above. Check with:
+
+```bash
+wc -l ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/ippo/graph_snd_log.csv \
+     ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/bern/graph_snd_log.csv
+```
+
+Then regenerate the appendix companion figure:
 
 ```bash
 python3 scripts/plot_reward_curves.py \
