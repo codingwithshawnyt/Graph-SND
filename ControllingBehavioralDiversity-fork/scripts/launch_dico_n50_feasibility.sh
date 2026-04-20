@@ -106,6 +106,12 @@ HYDRA_COMMON=(
 IPPO_LOG="logs/neurips_n50_seed${SEED}_ippo.log"
 BERN_LOG="logs/neurips_n50_seed${SEED}_bern_p${P}.log"
 
+# Logs live under THIS directory (the fork root), not the parent Graph-SND
+# repo root — print absolutes so `tail`/`wc` from the wrong cwd still works.
+echo "[$(date -Is)] Fork root: ${ROOT}"
+echo "[$(date -Is)] IPPO log:    ${ROOT}/${IPPO_LOG}"
+echo "[$(date -Is)] Bernoulli log: ${ROOT}/${BERN_LOG}"
+
 echo "[$(date -Is)] n=${N_AGENTS} seed=${SEED} iters=${MAX_ITERS} envs/worker=${ENV_N} -> ${RESULTS_DIR}"
 
 echo "[$(date -Is)] GPU 0: IPPO baseline (desired_snd=-1)      -> ${IPPO_DIR}"

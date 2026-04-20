@@ -236,7 +236,8 @@ cd ~/shawnr/Graph-SND  # or wherever the repo lives on riddle
 source .venv/bin/activate
 cd ControllingBehavioralDiversity-fork
 bash scripts/launch_dico_n50_feasibility.sh
-# Monitor: tail -f logs/neurips_n50_seed0_*.log
+# Monitor (paths are under the fork, not the parent repo):
+#   tail -f ControllingBehavioralDiversity-fork/logs/neurips_n50_seed0_*.log
 # Artefacts:
 #   results/neurips_final_n50/seed0/ippo/graph_snd_log.csv
 #   results/neurips_final_n50/seed0/bern/graph_snd_log.csv
