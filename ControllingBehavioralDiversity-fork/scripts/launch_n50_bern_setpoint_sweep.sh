@@ -8,12 +8,22 @@
 # subshell and breaks `wait` ("pid is not a child of this shell"); jobs may
 # orphan but keep training.
 #
+# OOM handling: if the run exits with CUDA OOM (detected in the log), the same
+# cell is retried on the SAME physical GPU after a short sleep. Optionally
+# shrink ENV_N / FRAMES_PER_BATCH each attempt (OOM_SHRINK=1, default).
+#
+# Runs one training job at a time (sequential) so two sweeps never fight for
+# the same GPU memory on shared hosts; alternate GPUs with SWEEP_ALTERNATE_GPUS=1.
+#
 # Usage (from fork root, tmux recommended):
 #   bash scripts/launch_n50_bern_setpoint_sweep.sh
 #   FORCE=1 bash scripts/launch_n50_bern_setpoint_sweep.sh   # overwrite existing CSV dirs
 #
 # Optional env:
 #   SNDS="0.12 0.14 0.15"   SEEDS="0 1 2"   RESULTS_BASE=...   MAX_ITERS=167
+#   MAX_OOM_RETRIES=8       OOM_RETRY_SLEEP_SEC=20   OOM_SHRINK=1   OOM_MIN_ENV_N=32
+#   SWEEP_GPU=0             # pin every cell to this GPU (ignore alternation)
+#   SWEEP_ALTERNATE_GPUS=1  # default: round-robin 0,1,0,1,... (set 0 to always use SWEEP_GPU)
 
 set -euo pipefail
 
@@ -41,6 +51,14 @@ N_FOOD="${N_FOOD:-${N_AGENTS}}"
 RESULTS_BASE="${RESULTS_BASE:-${ROOT}/results/neurips_final_n50_setpoint_sweep}"
 FORCE="${FORCE:-0}"
 
+MAX_OOM_RETRIES="${MAX_OOM_RETRIES:-8}"
+OOM_RETRY_SLEEP_SEC="${OOM_RETRY_SLEEP_SEC:-20}"
+OOM_SHRINK="${OOM_SHRINK:-1}"
+OOM_MIN_ENV_N="${OOM_MIN_ENV_N:-32}"
+MIN_CSV_LINES="${MIN_CSV_LINES:-150}"
+SWEEP_ALTERNATE_GPUS="${SWEEP_ALTERNATE_GPUS:-1}"
+SWEEP_GPU="${SWEEP_GPU:-0}"
+
 case "${P}" in
   0.1|0.10|1e-1) ESTIMATOR=graph_p01 ;;
   0.25|0.250) ESTIMATOR=graph_p025 ;;
@@ -50,8 +68,22 @@ case "${P}" in
     ;;
 esac
 
+log_is_oom() {
+  local log="$1"
+  [[ -f "$log" ]] || return 1
+  grep -qE 'OutOfMemoryError|CUDA out of memory' "$log"
+}
+
+csv_sufficient() {
+  local csv="$1"
+  [[ -s "$csv" ]] || return 1
+  local n
+  n=$(wc -l <"$csv" | tr -d ' ')
+  ((n >= MIN_CSV_LINES))
+}
+
 run_bern() {
-  local SEED="$1" DESIRED_SND="$2" GPU="$3"
+  local SEED="$1" DESIRED_SND="$2" GPU="$3" eff_n="$4" eff_batch="$5"
   local TAG="${DESIRED_SND//./p}"
   local OUT="${RESULTS_BASE}/seed${SEED}/snd${TAG}/bern"
   local LOG="${ROOT}/logs/n50_seed${SEED}_snd${TAG}_bern.log"
@@ -62,8 +94,7 @@ run_bern() {
   fi
   mkdir -p "$OUT"
 
-  echo "[$(date -Is)] start seed=${SEED} DESIRED_SND=${DESIRED_SND} GPU=${GPU} -> ${OUT}"
-  # Must run in THIS shell (no command substitution) so $! is waitable.
+  echo "[$(date -Is)] start seed=${SEED} DESIRED_SND=${DESIRED_SND} GPU=${GPU} env_n=${eff_n} batch=${eff_batch} -> ${OUT}"
   CUDA_VISIBLE_DEVICES="${GPU}" nohup "${RUNNER[@]}" \
     --config-name dispersion_ippo_knn_config \
     "${LOGGERS}" \
@@ -72,8 +103,8 @@ run_bern() {
     "task.n_food=${N_FOOD}" \
     "task.share_reward=true" \
     "experiment.max_n_iters=${MAX_ITERS}" \
-    "experiment.on_policy_n_envs_per_worker=${ENV_N}" \
-    "experiment.on_policy_collected_frames_per_batch=${FRAMES_PER_BATCH}" \
+    "experiment.on_policy_n_envs_per_worker=${eff_n}" \
+    "experiment.on_policy_collected_frames_per_batch=${eff_batch}" \
     "experiment.render=false" \
     "experiment.train_device=cuda:0" \
     "experiment.sampling_device=cuda:0" \
@@ -89,50 +120,89 @@ health() {
   local pid="$1" log="$2"
   sleep 20
   if ! kill -0 "$pid" 2>/dev/null; then
-    echo "ERROR: pid ${pid} died early; tail ${log}" >&2
-    tail -n 120 "$log" >&2 || true
-    exit 1
+    echo "[$(date -Is)] WARN: pid ${pid} gone before 20s; check ${log}" >&2
+    return 1
   fi
+  return 0
+}
+
+# Run one (SEED, SND, GPU) cell until success or non-OOM failure or retries exhausted.
+# On OOM: same GPU, clear output dir, optional shrink env/batch, sleep, retry.
+run_cell_with_oom_retries() {
+  local SEED="$1" DESIRED_SND="$2" GPU="$3"
+  local TAG="${DESIRED_SND//./p}"
+  local OUT="${RESULTS_BASE}/seed${SEED}/snd${TAG}/bern"
+  local LOG="${ROOT}/logs/n50_seed${SEED}_snd${TAG}_bern.log"
+  local csv="${OUT}/graph_snd_log.csv"
+
+  if [[ -s "$csv" && "$FORCE" != "1" ]] && csv_sufficient "$csv"; then
+    echo "[$(date -Is)] skip (complete): $csv"
+    return 0
+  fi
+
+  local attempt=1
+  local eff_n="${ENV_N}"
+  local eff_batch="${FRAMES_PER_BATCH}"
+
+  while ((attempt <= MAX_OOM_RETRIES)); do
+    rm -rf "$OUT"
+    mkdir -p "$OUT"
+    : >"${LOG}"
+
+    run_bern "$SEED" "$DESIRED_SND" "$GPU" "$eff_n" "$eff_batch"
+    local pid=$!
+    health "$pid" "$LOG" || true
+
+    local rc=0
+    wait "$pid" || rc=$?
+
+    if [[ "$rc" -eq 0 ]] && csv_sufficient "$csv"; then
+      echo "[$(date -Is)] ok seed=${SEED} snd=${DESIRED_SND} gpu=${GPU} attempt=${attempt} lines=$(wc -l <"$csv" | tr -d ' ')"
+      return 0
+    fi
+
+    if log_is_oom "$LOG"; then
+      echo "[$(date -Is)] OOM seed=${SEED} snd=${DESIRED_SND} gpu=${GPU} attempt=${attempt}/${MAX_OOM_RETRIES} (env_n=${eff_n} batch=${eff_batch})" >&2
+      if ((attempt == MAX_OOM_RETRIES)); then
+        echo "ERROR: OOM retries exhausted for seed=${SEED} snd=${DESIRED_SND} gpu=${GPU}" >&2
+        tail -n 60 "$LOG" >&2 || true
+        return 1
+      fi
+      if [[ "$OOM_SHRINK" == "1" ]]; then
+        eff_n=$((eff_n * 3 / 4))
+        ((eff_n < OOM_MIN_ENV_N)) && eff_n=${OOM_MIN_ENV_N}
+        eff_batch=$((eff_n * 100))
+        echo "[$(date -Is)] shrink -> env_n=${eff_n} batch=${eff_batch}" >&2
+      fi
+      sleep "${OOM_RETRY_SLEEP_SEC}"
+      attempt=$((attempt + 1))
+      continue
+    fi
+
+    echo "ERROR: seed=${SEED} snd=${DESIRED_SND} gpu=${GPU} failed (rc=${rc}), not classified as OOM. Tail ${LOG}" >&2
+    tail -n 80 "$LOG" >&2 || true
+    return 1
+  done
+
+  echo "ERROR: exhausted attempts for seed=${SEED} snd=${DESIRED_SND}" >&2
+  return 1
 }
 
 read -r -a SNDS <<<"${SNDS:-0.12 0.14 0.15}"
 read -r -a SEEDS <<<"${SEEDS:-0 1 2}"
 
-pids=()
-logs=()
-
-flush() {
-  if ((${#pids[@]} == 0)); then return 0; fi
-  local i pid
-  for i in "${!pids[@]}"; do
-    pid="${pids[$i]}"
-    health "$pid" "${logs[$i]}"
-  done
-  for pid in "${pids[@]}"; do wait "$pid" || exit 1; done
-  pids=()
-  logs=()
-}
-
+idx=0
 for SND in "${SNDS[@]}"; do
   for SEED in "${SEEDS[@]}"; do
-    gpu=$((${#pids[@]} % 2))
-    TAG="${SND//./p}"
-    LOG="${ROOT}/logs/n50_seed${SEED}_snd${TAG}_bern.log"
-
-    if [[ -s "${RESULTS_BASE}/seed${SEED}/snd${TAG}/bern/graph_snd_log.csv" && "$FORCE" != "1" ]]; then
-      continue
+    if [[ "${SWEEP_ALTERNATE_GPUS}" == "1" ]]; then
+      gpu=$((idx % 2))
+    else
+      gpu=${SWEEP_GPU}
     fi
+    idx=$((idx + 1))
 
-    run_bern "$SEED" "$SND" "$gpu"
-    # Last background PID from this shell (not from a subshell).
-    pids+=("$!")
-    logs+=("$LOG")
-
-    if ((${#pids[@]} == 2)); then
-      flush
-    fi
+    run_cell_with_oom_retries "$SEED" "$SND" "$gpu"
   done
 done
-flush
 
 echo "[$(date -Is)] done. Outputs under: ${RESULTS_BASE}/"
