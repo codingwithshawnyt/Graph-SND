@@ -1,0 +1,193 @@
+\section*{NeurIPS Paper Checklist}
+
+\begin{enumerate}
+
+\item {\bf Claims}
+    \item[] Question: Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The abstract and Section~\ref{sec:intro}
+    state exactly the four claims validated by the experiments
+    (recovery, unbiasedness, concentration, and wall-clock speedup),
+    with the downstream DiCo integration flagged separately, and each
+    claim is numbered and cross-referenced. The scope restrictions
+    (IPPO only, VMAS Multi-Agent Goal Navigation and Dispersion, fixed
+    Gaussian policies, single DiCo set point) are stated in
+    Section~\ref{sec:discussion} (Limitations) and do not contradict
+    any claim in the abstract or introduction.
+
+\item {\bf Limitations}
+    \item[] Question: Does the paper discuss the limitations of the work performed by the authors?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: Section~\ref{sec:discussion} contains a
+    dedicated ``Limitations'' paragraph itemising five scope limits
+    (scale/timing regime coverage, scenario and DiCo-configuration
+    coverage, fixed-$G$ ablation, closed-form Wasserstein assumption,
+    IPPO-only scope).
+
+\item {\bf Theory assumptions and proofs}
+    \item[] Question: For each theoretical result, does the paper provide the full set of assumptions and a complete (and correct) proof?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: All six formal results
+    (Propositions~\ref{prop:recovery}--\ref{prop:unbiased} and
+    Theorem~\ref{thm:concentration}) are stated with their
+    assumptions in Sections~\ref{sec:method}--\ref{sec:theory} and
+    proved in full in Appendix~\ref{app:proofs}. Assumptions (e.g.,
+    non-negative edge weights with $W(G)>0$, bounded distances
+    $d(i,j)\in[0,D_{\max}]$, independent Bernoulli inclusion under
+    Horvitz--Thompson weights) are stated inside the corresponding
+    theorem statements and reused verbatim in the proofs.
+
+\item {\bf Experimental result reproducibility}
+    \item[] Question: Does the paper fully disclose all the information needed to reproduce the main experimental results of the paper?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: Section~\ref{sec:experiments:setup}
+    specifies the VMAS environment, team sizes, policy architecture,
+    training algorithm (IPPO), checkpoints (iter~0, iter~100), rollout
+    set size, and metric implementation. Appendix~\ref{app:hyperparams}
+    lists every PPO hyperparameter and the $n{=}100$ scaling overrides.
+    The frozen-init GPU timing sweep and the DiCo integration
+    (Sections~\ref{sec:experiments:timing},
+    \ref{sec:experiments:dico-dispersion}) specify batch
+    shape, timing regime (\texttt{torch.cuda.synchronize} on both
+    sides of every \texttt{perf\_counter}), number of trials, number
+    of seeds, and configuration of the $k$-NN graph and the Bernoulli
+    random graph. Everything needed to reconstruct the code paths is
+    in \texttt{graphsnd/metrics.py}, \texttt{graphs.py},
+    \texttt{training/train\_navigation\_batched.py}, and
+    \texttt{experiments/exp2\_timing\_scaling.py} in the companion
+    repository.
+
+\item {\bf Open access to data and code}
+    \item[] Question: Does the paper provide open access to the data and code, with sufficient instructions to faithfully reproduce the main experimental results, as described in supplemental material?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: All code is released at the repository
+    cited in the Conclusion, with a top-level \texttt{README.md}
+    that specifies installation, training, experiment reproduction
+    commands, and seed-42 expected values for each of the four
+    validated claims. Raw CSVs, summary JSONs, and figure PDFs for
+    every experiment in the paper are checked into the repository
+    under \texttt{results/}. A preflight script
+    (\texttt{scripts/preflight.sh}) runs the test suite and a
+    smoke-training pass on each visible CUDA device to catch
+    environment problems before overnight runs. For the anonymous
+    submission the repository URL is anonymised in the main text;
+    the supplementary material contains an anonymised snapshot.
+
+\item {\bf Experimental setting/details}
+    \item[] Question: Does the paper specify all the training and test details necessary to understand the results?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: Training details (optimiser, learning
+    rate, clip parameter, GAE $\lambda$, discount $\gamma$, rollout
+    shape, mini-batch size, PPO epochs, hidden-layer width, activation)
+    are listed in Appendix~\ref{app:hyperparams}. The DiCo integration
+    of Section~\ref{sec:experiments:dico-dispersion} additionally
+    specifies the HetControl architecture, $\SND_{\mathrm{des}}{=}0.1$
+    set point, $167$-iteration budget, three seeds, $k{=}3$ for the
+    $k$-NN graph, Bernoulli inclusion probability $p{=}0.1$, and the
+    $128$-env subsample used for the $k$-NN construction.
+
+\item {\bf Experiment statistical significance}
+    \item[] Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The unbiasedness diagnostic
+    (Section~\ref{sec:experiments:verify}, Appendix~\ref{app:verify})
+    reports $95\%$ confidence intervals from $2{,}000$ Bernoulli draws
+    per $p$ and the standardised deviation
+    $|\mathrm{bias}|/\mathrm{SE}$ as a sharper test. The concentration
+    diagnostic reports the empirical violation rate at $\delta{=}0.1$
+    over $2{,}000$ draws per cell and the $95$th-percentile deviation.
+    The timing experiments
+    (Section~\ref{sec:experiments:timing},
+    \ref{sec:experiments:scaling}) report mean, median, and standard
+    deviation over $20$ timing trials per cell after $3$ warm-ups.
+    The DiCo experiment (Section~\ref{sec:experiments:dico-dispersion})
+    reports mean $\pm$ standard deviation over three seeds for reward
+    and applied SND, and median with IQR for per-call metric cost.
+
+\item {\bf Experiments compute resources}
+    \item[] Question: For each experiment, does the paper provide sufficient information on the computer resources needed to reproduce the experiments?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The $n{\in}\{4,8,16\}$ frozen-checkpoint
+    verifications (Section~\ref{sec:experiments:verify},
+    Appendix~\ref{app:verify}) run on a single CPU core with the
+    reported $20$ trials per cell in minutes. The $n{=}100$ overnight
+    PPO run (Section~\ref{sec:experiments:scaling}) fits on one
+    RTX~4090, as does the frozen-init $n\in\{100,250,500\}$ GPU timing
+    sweep (Section~\ref{sec:experiments:timing}). The DiCo
+    closed-loop experiment
+    (Section~\ref{sec:experiments:dico-dispersion}) also
+    runs on one RTX~4090 at the reported $167$-iteration budget.
+    Total compute for the experiments reported in this paper is
+    under $24$ GPU-hours on one RTX~4090 plus a few CPU-hours for
+    the $n{\in}\{4,8,16\}$ benchmarks.
+
+\item {\bf Code of ethics}
+    \item[] Question: Does the research conducted in the paper conform, in every respect, with the NeurIPS Code of Ethics?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The work is theoretical and empirical
+    research on a metric for behavioural diversity in cooperative
+    MARL. It does not involve human subjects, sensitive data, or
+    release of models with plausible misuse potential. No deviations
+    from the NeurIPS Code of Ethics are required.
+
+\item {\bf Broader impacts}
+    \item[] Question: Does the paper discuss both potential positive societal impacts and negative societal impacts of the work performed?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: Graph-SND is a methodological metric
+    contribution that reduces the wall-clock cost of measuring
+    behavioural diversity in cooperative MARL. It enables neither
+    new capabilities nor new deployments; it only makes an existing
+    measurement cheaper. We therefore do not identify a direct path
+    to positive or negative societal impact.
+
+\item {\bf Safeguards}
+    \item[] Question: Does the paper describe safeguards that have been put in place for responsible release of data or models that have a high risk for misuse?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No data or models with misuse potential
+    are released; the released artefacts are experimental code,
+    reproducible CSV/JSON result files, and paper figures.
+
+\item {\bf Licenses for existing assets}
+    \item[] Question: Are the creators or original owners of assets used in the paper properly credited and are the license and terms of use explicitly mentioned and properly respected?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: VMAS \citep{bettini2022vmas} and DiCo
+    \citep{bettini2024dico} are credited in the main text and
+    released under their original open-source licenses. The vendored
+    fork of the DiCo codebase in
+    \texttt{ControllingBehavioralDiversity-fork/} retains the
+    upstream license, adds a \texttt{GRAPH\_SND\_CHANGES.md} file
+    documenting the modifications, and includes the preferred
+    citation in \texttt{CITATION.cff}. The original SND paper
+    \citep{bettini2025snd} is cited throughout.
+
+\item {\bf New assets}
+    \item[] Question: Are new assets introduced in the paper well documented and is the documentation provided alongside the assets?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The new assets are the \texttt{graphsnd}
+    Python package, the two training scripts, the experiment
+    scripts, and the released figure and CSV outputs. The top-level
+    \texttt{README.md} documents installation, the four entry-point
+    experiments, the overnight training launcher, and the repository
+    layout, and cross-references the specific paper sections that
+    each asset reproduces.
+
+\item {\bf Crowdsourcing and research with human subjects}
+    \item[] Question: For crowdsourcing experiments and research with human subjects, does the paper include the full text of instructions given to participants and screenshots, if applicable, as well as details about compensation?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No crowdsourcing or human-subjects
+    research is involved.
+
+\item {\bf Institutional review board (IRB) approvals or equivalent for research with human subjects}
+    \item[] Question: Does the paper describe potential risks incurred by study participants, whether such risks were disclosed to the subjects, and whether IRB approvals (or equivalent) were obtained?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No human-subjects research is involved.
+
+\item {\bf Declaration of LLM usage}
+    \item[] Question: Does the paper describe the usage of LLMs if it is an important, original, or non-standard component of the core methods in this research?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No LLM is part of the methods, theory,
+    or experimental pipeline of this paper. LLMs were used only as
+    writing / editing assistance and do not affect the core
+    methodology, scientific rigour, or originality of the research.
+
+\end{enumerate}

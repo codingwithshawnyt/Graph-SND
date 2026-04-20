@@ -1,0 +1,58 @@
+{
+  "config": {
+    "n_agents_list": [
+      100,
+      250,
+      500
+    ],
+    "num_envs": 32,
+    "rollout_steps": 128,
+    "obs_dim": 18,
+    "act_dim": 2,
+    "u_range": 1.0,
+    "hidden_sizes": [
+      64,
+      64
+    ],
+    "p_values": [
+      0.1,
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "timing_trials": 20,
+    "warmup_trials": 3,
+    "seed": 42,
+    "device": "cuda:0",
+    "dtype": "float32"
+  },
+  "elapsed_sec": 1506.5378212928772,
+  "rows_written": 15,
+  "per_n_summary": [
+    {
+      "n": 100,
+      "full_time_mean_ms": 614.940620600828,
+      "full_time_median_ms": 615.0377355079399,
+      "best_speedup_p": 0.1,
+      "best_speedup_mean": 9.774812498179994,
+      "best_speedup_median": 9.790030041290562
+    },
+    {
+      "n": 250,
+      "full_time_mean_ms": 3864.5848707979894,
+      "full_time_median_ms": 3865.9792760008713,
+      "best_speedup_p": 0.1,
+      "best_speedup_mean": 10.044590287320808,
+      "best_speedup_median": 10.024691031940021
+    },
+    {
+      "n": 500,
+      "full_time_mean_ms": 15502.832064597169,
+      "full_time_median_ms": 15509.070054496988,
+      "best_speedup_p": 0.1,
+      "best_speedup_mean": 9.978581233246155,
+      "best_speedup_median": 9.988306880872061
+    }
+  ]
+}

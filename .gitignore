@@ -1,4 +1,11 @@
-# Python
+# =============================================================================
+# Graph-SND .gitignore
+# Guiding principle: keep the paper's numeric evidence (CSV/JSON summaries,
+# figure PDFs) and all source code; ignore heavy binaries, per-run artefacts,
+# and copyright-restricted documents.
+# =============================================================================
+
+# ---------- Python / packaging ----------
 __pycache__/
 *.py[cod]
 *$py.class
@@ -8,39 +15,82 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
-# Virtual environments
+# ---------- Virtual environments ----------
 .venv/
 venv/
 env/
 
-# Editors / OS
+# ---------- Editors / OS ----------
 .DS_Store
+**/.DS_Store
 .idea/
 .vscode/
 
-# Build / dist
+# ---------- Build / dist ----------
 build/
 dist/
 
-# Experiment outputs: ignore heavy binaries, track CSV/JSON/PDF so the
-# paper's numeric evidence and figures can be reproduced from the repo.
+# ---------- LaTeX build artefacts ----------
+# Paper PDFs are produced from LaTeX; keep .tex, figures, and .bib tracked.
+Paper/*.aux
+Paper/*.bbl
+Paper/*.blg
+Paper/*.log
+Paper/*.out
+Paper/*.toc
+Paper/*.synctex.gz
+Paper/*.fdb_latexmk
+Paper/*.fls
+# The compiled paper PDF itself: keep ignored (generate locally).
+Paper/main.pdf
+
+# ---------- Copyright-restricted documents ----------
+# JMLR formatted version of Bettini et al. 2025 (SND), not redistributable.
+24-1477.pdf
+# Any PDF anywhere called like a JMLR / IEEE article number: stay conservative.
+*-[0-9][0-9][0-9][0-9].pdf
+
+# ---------- Experiment outputs ----------
+# Keep: *.csv, *.json, *.pdf produced by plot scripts.
+# Ignore: binary checkpoints, raw Hydra dumps, intermediate archives.
 checkpoints/*.pt
 checkpoints/*.metric.pt
+!checkpoints/.gitkeep
 results/**/*.png
 results/**/*.npz
-!checkpoints/.gitkeep
 !results/.gitkeep
 !results/exp1/.gitkeep
+!results/exp2/.gitkeep
 !results/scaling/.gitkeep
+# Per-run tarballs and large intermediate bundles.
+results/**/*.tgz
+results/**/*.tar.gz
+# Hydra multi-run output trees and raw pre-aggregation dumps inside the
+# DiCo integration experiment.
+results/dico/outputs/
+results/dico/raw/
+results/dico/logs/
+results/dico/results_dico/
+results/dico/results_dico_n4/
+results/dico/scripts/
+# Legacy Experiment-1 checkpoints (replaced by exp2/, scaling/).
+results/graphsnd_n100_results/
+# Dry-run scaffolding for the k-NN variant of DiCo.
+**/_dryrun_knn/
+**/_dryrun*/
 
-# Logs and overnight-run artifacts
+# ---------- Logs and overnight-run artefacts ----------
 *.log
 logs/
 wandb/
 
-# DiCo fork: optional local copy of the Bettini et al. paper PDF (large;
-# clone from arXiv if needed).
+# ---------- DiCo fork ----------
+# Optional local copy of the Bettini et al. paper PDF (large; clone from arXiv
+# if needed).
 ControllingBehavioralDiversity-fork/*.pdf
+# DiCo fork's own experiment outputs (mirror of upstream Hydra behaviour).
+ControllingBehavioralDiversity-fork/results/
+ControllingBehavioralDiversity-fork/outputs/
 
-# Jupyter
+# ---------- Jupyter ----------
 .ipynb_checkpoints/
