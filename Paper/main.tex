@@ -47,8 +47,6 @@
 \newcommand{\abs}[1]{\left\lvert #1 \right\rvert}
 \newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
 \newcommand{\ind}{\mathbf{1}}
-% Placeholder command for numbers filled in after the n=500 riddle run lands.
-\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
 
 % ---------- Title ----------
 \title{Scalable System Neural Diversity:\\
@@ -852,10 +850,10 @@ validation, and is outside this paper's scope.
 At $n=500$, the full pair set has $\binom{500}{2} = 124{,}750$
 entries, and Bernoulli sampling at $p=0.1$ retains
 $\mathbb{E}[|E(G_{0.1})|] \approx 12{,}475$ edges. Per call, full
-$\SND$ takes \TODO{full-SND time in ms} on one RTX 4090 in fp32,
-while $\widehat{\SND}(G_{0.1})$ takes \TODO{Graph-SND time at p=0.1
-in ms}, for a mean speedup of \TODO{mean speedup at p=0.1} (median
-\TODO{median speedup at p=0.1}) over 20 trials; this sits within
+$\SND$ takes $15{,}502.8\,\mathrm{ms}$ on one RTX 4090 in fp32,
+while $\widehat{\SND}(G_{0.1})$ takes $1{,}553.6\,\mathrm{ms}$, for a
+mean speedup of $9.98\times$ (median $9.99\times$) over 20 trials;
+this sits within
 noise of the structural $\binom{n}{2}/|E(G_{0.1})| = 10$ prediction.
 Figure~\ref{fig:timing-n500} (left) shows the full speedup curve
 across $p \in \{0.1, 0.25, 0.5, 0.75, 1.0\}$, and
@@ -869,10 +867,9 @@ $125\times$ span of team sizes, spanning two distinct timing regimes
 (CPU frozen-checkpoint and GPU frozen-init / online).
 
 \paragraph{Interpretation.}
-At $n=500$ full $\SND$ on GPU is measured in
-\TODO{order-of-magnitude for full-SND, e.g.~tens of seconds} per
-call; Graph-SND at $p=0.1$ reduces this to
-\TODO{order-of-magnitude for Graph-SND, e.g.~a few seconds}. The
+At $n=500$ full $\SND$ on GPU is measured at roughly
+$15.5$ seconds per call; Graph-SND at $p=0.1$ reduces this to roughly
+$1.55$ seconds per call. The
 point is not the absolute wall clock---500 fully heterogeneous
 Gaussian policies is an unrealistic configuration for most tasks of
 interest---but that the $\binom{n}{2}/|E|$ speedup factor of
