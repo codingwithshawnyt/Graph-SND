@@ -129,16 +129,35 @@ def _smooth(arr: np.ndarray, window: int) -> np.ndarray:
 def _aggregate(
     data: np.ndarray,
     smooth: int,
-) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-    """Return (mean, std-or-None) over the leading seed axis after smoothing."""
+    aggregator: str = "mean_std",
+) -> Tuple[np.ndarray, Optional[np.ndarray], Optional[np.ndarray]]:
+    """Aggregate across the leading seed axis, then smooth.
+
+    Returns ``(center, lower_or_None, upper_or_None)``. When
+    ``aggregator == "mean_std"`` the band is mean ± std. When
+    ``aggregator == "median_iqr"`` the band is [p25, p75]. Median + IQR
+    is the right choice for heavy-tailed per-call wall-clock timing:
+    mean/std there is dominated by rare long tails (GC, CUDA sync) and
+    produces a misleading variance band.
+    """
     if data.ndim == 1:
-        mean = _smooth(data, smooth)
-        return mean, None
-    mean = np.nanmean(data, axis=0)
-    std = np.nanstd(data, axis=0)
-    mean = _smooth(mean, smooth)
-    std = _smooth(std, smooth)
-    return mean, std
+        center = _smooth(data, smooth)
+        return center, None, None
+
+    if aggregator == "median_iqr":
+        center = np.nanmedian(data, axis=0)
+        lower = np.nanpercentile(data, 25, axis=0)
+        upper = np.nanpercentile(data, 75, axis=0)
+    else:
+        center = np.nanmean(data, axis=0)
+        std = np.nanstd(data, axis=0)
+        lower = center - std
+        upper = center + std
+
+    center = _smooth(center, smooth)
+    lower = _smooth(lower, smooth)
+    upper = _smooth(upper, smooth)
+    return center, lower, upper
 
 
 def _plot_panel(
@@ -151,28 +170,35 @@ def _plot_panel(
     log_y: bool = False,
     hline: Optional[float] = None,
     hline_label: Optional[str] = None,
+    aggregator: str = "mean_std",
+    annotate_speedup: bool = False,
 ) -> bool:
     """Draw one panel. Returns True if anything was plotted."""
     any_drawn = False
+    per_series_medians: Dict[str, float] = {}
     for label, (iters, data_by_col) in all_data.items():
         raw = data_by_col.get(column)
         if raw is None:
             continue
-        mean, std = _aggregate(raw, smooth)
-        iters_plot = iters[: len(mean)]
+        if np.all(np.isnan(raw)):
+            continue
+        center, lower, upper = _aggregate(raw, smooth, aggregator)
+        iters_plot = iters[: len(center)]
         display_label = LABEL_MAP.get(label, label)
         color = COLOR_MAP.get(label)
-        ax.plot(iters_plot, mean, label=display_label, linewidth=1.6, color=color)
-        if std is not None:
+        ax.plot(iters_plot, center, label=display_label, linewidth=1.6, color=color)
+        if lower is not None and upper is not None:
             ax.fill_between(
                 iters_plot,
-                mean - std,
-                mean + std,
+                lower,
+                upper,
                 alpha=0.18,
                 color=color,
                 linewidth=0,
             )
         any_drawn = True
+        if annotate_speedup and raw.ndim > 1:
+            per_series_medians[label] = float(np.nanmedian(raw))
 
     if hline is not None:
         ax.axhline(
@@ -190,6 +216,20 @@ def _plot_panel(
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.grid(alpha=0.3)
+
+    if annotate_speedup and "knn" in per_series_medians and "full" in per_series_medians:
+        k = per_series_medians["knn"]
+        f = per_series_medians["full"]
+        if k > 0 and f > 0:
+            ratio = f / k
+            ax.text(
+                0.97, 0.97,
+                rf"$\mathrm{{median\ full/k\text{{-}}NN}} = {ratio:.2f}\times$",
+                transform=ax.transAxes,
+                ha="right", va="top",
+                fontsize=9,
+                bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="0.7", alpha=0.9),
+            )
     return any_drawn
 
 
@@ -307,9 +347,11 @@ def main() -> None:
         all_data,
         column="metric_time_ms",
         ylabel="Metric wall-clock per call (ms)",
-        title="Per-call diversity cost",
+        title="Per-call diversity cost (median, IQR band)",
         smooth=args.smooth,
-        log_y=True,
+        log_y=False,
+        aggregator="median_iqr",
+        annotate_speedup=True,
     )
     if not drew_time:
         axes[2].text(
