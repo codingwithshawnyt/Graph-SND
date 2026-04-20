@@ -99,9 +99,11 @@ $G$ is complete and admits two interpretations selected by $G$: a
 localized diversity measure at cost $O(|E|)$; a \emph{random} $G$ with
 Horvitz--Thompson weights yields an unbiased estimator of full SND
 with a Hoeffding-type $O(1/\sqrt{m})$ error bound in the number of
-sampled edges $m$, independent of $n$. We prove six properties
+sampled edges $m$, independent of $n$. We prove seven properties
 (recovery, non-negativity, graph-automorphism invariance, complexity,
-unbiasedness, concentration) and verify them on VMAS Multi-Agent Goal
+unbiasedness, concentration, and a deterministic fixed-$G$ distortion
+bound via the edge forwarding index) and verify them on VMAS
+Multi-Agent Goal
 Navigation at $n\in\{4,8,16\}$, under a $500$-iteration PPO run at
 $n{=}100$, and in a frozen-init GPU timing sweep at
 $n\in\{100,250,500\}$: recovery is numerically exact, the concentration
@@ -169,11 +171,13 @@ $O(\varepsilon^{-2}\log(1/\delta))$ distance evaluations.
 complete graph and supports both fixed and random $G$, with two
 operational interpretations selected by $G$: localised diversity
 measure (fixed $G$) and Horvitz--Thompson sampling estimator of
-$\SND$ (random $G$). (ii) Six formal results
-(Section~\ref{sec:theory}): exact recovery on $K_n$, non-negativity,
-graph-automorphism invariance, $O(|E|)$ complexity, estimator
-unbiasedness, and Hoeffding-type concentration; proofs in
-Appendix~\ref{app:proofs}. (iii) Experiments on VMAS
+$\SND$ (random $G$). (ii) Seven formal results
+(Section~\ref{sec:theory}, Appendix~\ref{app:proofs}): exact
+recovery on $K_n$, non-negativity, graph-automorphism invariance,
+$O(|E|)$ complexity, Horvitz--Thompson unbiasedness and Hoeffding-type
+concentration for random $G$, and a deterministic distortion bound
+for fixed $G$ via the edge forwarding
+index~\citep{heydemann1989forwarding,leighton1999multicommodity}. (iii) Experiments on VMAS
 \citep{bettini2022vmas} verifying numerical recovery on $K_n$,
 estimator concentration at the predicted rate, wall-clock speedup
 matching the structural $1/p$ prediction across
@@ -516,13 +520,11 @@ target error $\varepsilon$, it suffices to sample
 $m = O\bigl(D_{\max}^2\, \varepsilon^{-2}\, \log(1/\delta)\bigr)$ edges,
 which for large $n$ is vastly smaller than $\binom{n}{2}$.
 
-A deterministic companion to Theorem~\ref{thm:concentration} holds for
-fixed $G$: Theorem~\ref{thm:distortion}
-(Appendix~\ref{app:proofs}) sandwiches
-$\SND/\SNDG^{\mathrm{u}}$ between $|E|/|\Pairs|$ and
-$|E|\pi(G)/|\Pairs|$, where $\pi(G)$ is the edge forwarding
-index~\citep{heydemann1989forwarding}; for $d$-regular spectral
-expanders the upper ratio is $\mathcal{O}(\log n)$ at $\Theta(n\log n)$
+A deterministic fixed-$G$ companion (Theorem~\ref{thm:distortion},
+Appendix~\ref{app:proofs}) sandwiches $\SND/\SNDG^{\mathrm{u}}$ between
+$|E|/|\Pairs|$ and $|E|\pi(G)/|\Pairs|$, with $\pi(G)$ the edge
+forwarding index~\citep{heydemann1989forwarding}; on $d$-regular
+expanders this gives ratio $\mathcal{O}(\log n)$ at $\Theta(n\log n)$
 edges~\citep{leighton1999multicommodity}.
 
 % ============================================================
@@ -804,10 +806,14 @@ Remark~\ref{rem:semantics}), while a random $G$ with
 Horvitz--Thompson weights is an \emph{estimation} commitment
 (full $\SND$ is the target, sparsity is computational); their
 guarantees are complementary (exact recovery/invariance versus
-unbiasedness/concentration). The most immediate downstream
-application is DiCo \citep{bettini2024dico}: $\SNDG$ drops in as the
-control target, with $G$ selecting between local diversity control
-and a compute-subsampled variant, as validated on VMAS Dispersion.
+unbiasedness/concentration and the fixed-$G$ distortion bound of
+Theorem~\ref{thm:distortion}, which ties MARL diversity aggregation to
+classical edge-congestion / multicommodity-flow results on
+graphs~\citep{chung1987forwarding,heydemann1989forwarding,leighton1999multicommodity}).
+The most immediate downstream application is DiCo
+\citep{bettini2024dico}: $\SNDG$ drops in as the control target, with
+$G$ selecting between local diversity control and a compute-subsampled
+variant, as validated on VMAS Dispersion.
 
 \paragraph{Limitations.}
 We flag five scope limits.
@@ -823,7 +829,7 @@ experiments use only Multi-Agent Goal Navigation
 single $\SND_{\mathrm{des}}{=}0.1$ over three seeds.
 \emph{(3) Fixed-$G$ ablation outside DiCo:} the only structured fixed
 $G$ we exercise is the $k$-NN graph inside DiCo;
-Theorem~\ref{thm:distortion} bounds the worst-case distortion for
+Theorem~\ref{thm:distortion} bounds worst-case distortion for
 arbitrary fixed $G$, but distribution-dependent sharpenings and an
 expander-design ablation are untested.
 \emph{(4) Closed-form Wasserstein assumption:} every computational
@@ -840,30 +846,27 @@ Beyond closing these limits, four directions are natural:
 (i) \emph{learned or task-adaptive $G$}; (ii) \emph{non-Gaussian
 policies} by substituting a closed-form or approximate $d$;
 (iii) \emph{distribution-dependent tightenings} of
-Theorem~\ref{thm:distortion} (e.g.\ variance-aware Bernstein-type
-bounds on $\{d(i,j)\}_{\{i,j\}\in E}$) and an empirical study of
-expander-graph fixed-$G$ designs; and (iv) a broader
-DiCo$+\SNDG$ study, over larger $n$, tasks, set-points,
-and the interaction of sampling noise in $\widehat{\SND}(G_p)$ with
-DiCo's set-point regulation.
+Theorem~\ref{thm:distortion} and an empirical expander-graph $G$
+study; and (iv) a broader DiCo$+\SNDG$ study, over larger $n$, tasks,
+set-points, and the interaction of sampling noise in
+$\widehat{\SND}(G_p)$ with DiCo's set-point regulation.
 \section{Conclusion}
 \label{sec:conclusion}
 
-We introduced Graph-SND, a graph-structured generalisation of SND
-that replaces the uniform average over $\binom{n}{2}$ pairs with a
-normalised weighted mean over the edges of a user-specified graph
-$G$: a localised diversity measure when $G$ is fixed, and an unbiased
-Horvitz--Thompson sampling estimator of $\SND$ when edges are drawn
-independently. Six formal results (Section~\ref{sec:theory}) and
-experiments across $n\in\{4,8,16,100,250,500\}$ on VMAS Goal
-Navigation and a DiCo closed loop on Dispersion confirm that $\SNDG$
-is a drop-in replacement for $\SND$: recovery is numerically exact,
-concentration is respected on every cell, wall-clock cost tracks
-$\binom{n}{2}/|E|$ across a $125\times$ span of $n$, and both $k$-NN
-and Bernoulli-$0.1$ substitutions inside DiCo match the full-$\SND$
-set point to within $10^{-3}$ and full-$\SND$ reward within seed
-variance. The choice of $G$ selects whether the signal measures
-local diversity or approximates global diversity at reduced cost.
+We introduced Graph-SND, replacing SND's $\binom{n}{2}$-pair average
+with a normalised weighted mean over the edges of a user-specified
+graph $G$: a localised diversity measure for fixed $G$, and an
+unbiased Horvitz--Thompson sampling estimator of $\SND$ for random
+$G$. Seven formal results and experiments across
+$n\in\{4,8,16,100,250,500\}$ on VMAS Goal Navigation and a DiCo closed
+loop on Dispersion confirm that $\SNDG$ is a drop-in replacement for
+$\SND$: recovery is numerically exact, concentration is respected on
+every cell, wall-clock cost tracks $\binom{n}{2}/|E|$ across a
+$125\times$ span of $n$, and both $k$-NN and Bernoulli-$0.1$
+substitutions inside DiCo match the full-$\SND$ set point to within
+$10^{-3}$ and full-$\SND$ reward within seed variance. The choice of
+$G$ selects whether the signal measures local diversity or
+approximates global diversity at reduced cost.
 \codelocation
 
 % ============================================================
@@ -1077,9 +1080,9 @@ $1$ on $K_n$, recovering Proposition~\ref{prop:recovery}.
 
 \begin{corollary}[Expander sparsification]
 \label{cor:expander-distortion}
-If $G$ is a $d$-regular Cayley graph on $n$ vertices with bounded
-spectral gap, then Theorem~\ref{thm:distortion} and
-$\pi(G)=\mathcal{O}(n\log n/d)$ give
+If $G$ is a $d$-regular graph on $n$ vertices with bounded spectral
+gap (e.g.\ a spectral expander or a random $d$-regular graph), then
+Theorem~\ref{thm:distortion} and $\pi(G)=\mathcal{O}(n\log n/d)$ give
 $|E|/|\Pairs|=d/(n-1)$ and $|E|\pi(G)/|\Pairs|=\mathcal{O}(\log n)$.
 Choosing $d=\Theta(\log n)$ yields $|E|=\Theta(n\log n)$ pairwise
 distance evaluations with worst-case relative distortion
