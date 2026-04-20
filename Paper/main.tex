@@ -516,6 +516,15 @@ target error $\varepsilon$, it suffices to sample
 $m = O\bigl(D_{\max}^2\, \varepsilon^{-2}\, \log(1/\delta)\bigr)$ edges,
 which for large $n$ is vastly smaller than $\binom{n}{2}$.
 
+A deterministic companion to Theorem~\ref{thm:concentration} holds for
+fixed $G$: Theorem~\ref{thm:distortion}
+(Appendix~\ref{app:proofs}) sandwiches
+$\SND/\SNDG^{\mathrm{u}}$ between $|E|/|\Pairs|$ and
+$|E|\pi(G)/|\Pairs|$, where $\pi(G)$ is the edge forwarding
+index~\citep{heydemann1989forwarding}; for $d$-regular spectral
+expanders the upper ratio is $\mathcal{O}(\log n)$ at $\Theta(n\log n)$
+edges~\citep{leighton1999multicommodity}.
+
 % ============================================================
 \section{Experiments}
 \label{sec:experiments}
@@ -813,10 +822,10 @@ experiments use only Multi-Agent Goal Navigation
 \citep{bettini2025snd}; the DiCo integration uses Dispersion at a
 single $\SND_{\mathrm{des}}{=}0.1$ over three seeds.
 \emph{(3) Fixed-$G$ ablation outside DiCo:} the only structured fixed
-$G$ we exercise is the $k$-NN graph inside DiCo, and no deterministic
-distortion bound $|\SNDG-\SND|\le f(G,\mathbf{D})$ is
-proved---only the random-$G$ guarantee
-(Theorem~\ref{thm:concentration}).
+$G$ we exercise is the $k$-NN graph inside DiCo;
+Theorem~\ref{thm:distortion} bounds the worst-case distortion for
+arbitrary fixed $G$, but distribution-dependent sharpenings and an
+expander-design ablation are untested.
 \emph{(4) Closed-form Wasserstein assumption:} every computational
 result uses the Gaussian closed form of \citet{bettini2025snd};
 the theorems hold for any bounded $d(i,j)\in[0,D_{\max}]$, but we
@@ -830,9 +839,11 @@ untested extension.
 Beyond closing these limits, four directions are natural:
 (i) \emph{learned or task-adaptive $G$}; (ii) \emph{non-Gaussian
 policies} by substituting a closed-form or approximate $d$;
-(iii) a \emph{deterministic fixed-$G$ distortion bound} under
-regularity conditions on $\mathbf{D}$ along $G$; and (iv) a
-broader DiCo$+\SNDG$ study, over larger $n$, tasks, set-points,
+(iii) \emph{distribution-dependent tightenings} of
+Theorem~\ref{thm:distortion} (e.g.\ variance-aware Bernstein-type
+bounds on $\{d(i,j)\}_{\{i,j\}\in E}$) and an empirical study of
+expander-graph fixed-$G$ designs; and (iv) a broader
+DiCo$+\SNDG$ study, over larger $n$, tasks, set-points,
 and the interaction of sampling noise in $\widehat{\SND}(G_p)$ with
 DiCo's set-point regulation.
 \section{Conclusion}
@@ -1027,6 +1038,120 @@ Thus with probability at least $1 - \delta$ conditional on $|E(G_p)| = m$,
 \;\leq\; D_{\max}\sqrt{\frac{\log(2/\delta)}{2m}}. \qed
 \]
 
+\subsection*{Deterministic fixed-$G$ distortion}
+\label{app:distortion}
+
+For a connected unit-weight graph $G=(\Agents,E)$, a \emph{path system}
+is an assignment of a simple $i$-$j$ path $\mathcal{R}_{ij}\subseteq E$
+to every pair $\{i,j\}\in\Pairs$, with
+$\mathcal{R}_{ij}=\{\{i,j\}\}$ whenever $\{i,j\}\in E$. The
+\emph{congestion} of a path system $\mathcal{R}$ at an edge
+$\{a,b\}\in E$ is
+$c_{\mathcal{R}}(a,b):=\abs{\{\{i,j\}\in\Pairs :
+\{a,b\}\in\mathcal{R}_{ij}\}}$, and the \emph{edge forwarding index} of
+$G$ is
+$\pi(G):=\min_{\mathcal{R}} \max_{\{a,b\}\in E} c_{\mathcal{R}}(a,b)$
+\citep{chung1987forwarding,heydemann1989forwarding}. The index depends
+on $G$ alone, satisfies $\pi(K_n)=1$, admits closed forms for many
+graph families (hypercubes, tori, Cayley graphs), and is
+$\mathcal{O}(n\log n / d)$ for $d$-regular graphs with bounded spectral
+gap~\citep{leighton1999multicommodity}.
+
+\begin{theorem}[Deterministic fixed-$G$ distortion]
+\label{thm:distortion}
+Let $G=(\Agents, E)$ be a connected graph with unit edge weights, and
+suppose $d:\Pairs\to\R_{\geq 0}$ satisfies the triangle inequality
+$d(i,j)\leq d(i,k)+d(k,j)$ for all $i,j,k\in\Agents$ (automatic for
+the Monte Carlo distance~\eqref{eq:dij}, since $\Wass$ is a metric).
+Writing $\SNDG^{\mathrm{u}}(\mathbf{D},G):=|E|^{-1}\sum_{\{i,j\}\in E}
+d(i,j)$ for the unit-weight variant of $\SNDG$,
+\begin{equation}
+\label{eq:distortion}
+\frac{|E|}{|\Pairs|}\,\SNDG^{\mathrm{u}}(\mathbf{D}, G)
+\;\leq\; \SND(\mathbf{D})
+\;\leq\; \frac{|E|\,\pi(G)}{|\Pairs|}\,\SNDG^{\mathrm{u}}(\mathbf{D}, G),
+\end{equation}
+so $|E|/|\Pairs|\leq\SND(\mathbf{D})/\SNDG^{\mathrm{u}}(\mathbf{D},G)\leq|E|\pi(G)/|\Pairs|$ whenever $\SNDG^{\mathrm{u}}>0$; both ratios are
+$1$ on $K_n$, recovering Proposition~\ref{prop:recovery}.
+\end{theorem}
+
+\begin{corollary}[Expander sparsification]
+\label{cor:expander-distortion}
+If $G$ is a $d$-regular Cayley graph on $n$ vertices with bounded
+spectral gap, then Theorem~\ref{thm:distortion} and
+$\pi(G)=\mathcal{O}(n\log n/d)$ give
+$|E|/|\Pairs|=d/(n-1)$ and $|E|\pi(G)/|\Pairs|=\mathcal{O}(\log n)$.
+Choosing $d=\Theta(\log n)$ yields $|E|=\Theta(n\log n)$ pairwise
+distance evaluations with worst-case relative distortion
+$\mathcal{O}(\log n)$, a $\Theta(n/\log n)$-factor reduction against
+full $\SND$.
+\end{corollary}
+
+\paragraph{Proof of Theorem~\ref{thm:distortion}.}
+
+\emph{Lower bound.} Since $d(i,j) \geq 0$, dropping the
+$|\Pairs|-|E|$ non-edge terms from the full sum cannot increase it:
+\[
+|\Pairs|\cdot\SND(\mathbf{D})
+\;=\; \sum_{\{i,j\}\in\Pairs} d(i,j)
+\;\geq\; \sum_{\{i,j\}\in E} d(i,j)
+\;=\; |E|\cdot\SNDG^{\mathrm{u}}(\mathbf{D},G),
+\]
+with equality iff $d(i,j)=0$ for every non-edge
+$\{i,j\}\in\Pairs\setminus E$.
+
+\emph{Upper bound.} Fix a path system $\mathcal{R}$ on $G$ in the sense
+of Section~\ref{sec:theory}. For each edge pair $\{i,j\}\in E$, the
+single-edge path $\mathcal{R}_{ij}=\{\{i,j\}\}$ gives the identity
+$d(i,j)=\sum_{\{a,b\}\in\mathcal{R}_{ij}} d(a,b)$. For each non-edge
+pair $\{i,j\}\in\Pairs\setminus E$, writing the path as
+$\mathcal{R}_{ij}=(i=v_0,v_1,\dots,v_L=j)$ and applying the triangle
+inequality $L-1$ times,
+\[
+d(i,j)\;\leq\; d(v_0,v_1)+d(v_1,v_L)\;\leq\;\cdots\;\leq\;
+\sum_{k=0}^{L-1} d(v_k,v_{k+1})
+\;=\; \sum_{\{a,b\}\in\mathcal{R}_{ij}} d(a,b).
+\]
+Combining both cases and exchanging the order of summation,
+\[
+\sum_{\{i,j\}\in\Pairs} d(i,j)
+\;\leq\; \sum_{\{i,j\}\in\Pairs}\sum_{\{a,b\}\in\mathcal{R}_{ij}} d(a,b)
+\;=\; \sum_{\{a,b\}\in E} c_{\mathcal{R}}(a,b)\,d(a,b),
+\]
+where
+$c_{\mathcal{R}}(a,b):=|\{\{i,j\}\in\Pairs : \{a,b\}\in\mathcal{R}_{ij}\}|$
+is the congestion of $\mathcal{R}$ at edge $\{a,b\}$. Since $d(a,b)\geq 0$,
+\[
+\sum_{\{a,b\}\in E} c_{\mathcal{R}}(a,b)\,d(a,b)
+\;\leq\; \Bigl(\max_{\{a,b\}\in E} c_{\mathcal{R}}(a,b)\Bigr)
+\sum_{\{a,b\}\in E} d(a,b).
+\]
+This inequality holds for every path system $\mathcal{R}$, so it holds
+in particular for one that attains the minimum in the definition of
+$\pi(G)$, for which the bracket equals $\pi(G)$. Therefore
+\[
+|\Pairs|\cdot\SND(\mathbf{D})
+\;\leq\; \pi(G)\cdot\sum_{\{a,b\}\in E} d(a,b)
+\;=\; \pi(G)\cdot |E|\cdot\SNDG^{\mathrm{u}}(\mathbf{D}, G).
+\]
+Dividing by $|\Pairs|$ yields
+$\SND(\mathbf{D})\leq (|E|\pi(G)/|\Pairs|)\,\SNDG^{\mathrm{u}}(\mathbf{D},G)$.
+The recovery statement follows because $K_n$ satisfies $\pi(K_n)=1$
+(take $\mathcal{R}_{ij}=\{\{i,j\}\}$ for all pairs) and
+$|E|=|\Pairs|=\binom{n}{2}$. \qed
+
+\paragraph{Fractional sharpening.}
+Replacing the integral path system by a convex combination of paths
+$f_{ij}=\sum_{\mathcal{R}\in\Pi_{ij}}\alpha_{\mathcal{R}}\mathbf{1}_{\mathcal{R}}$
+($\alpha_{\mathcal{R}}\geq 0$, $\sum_{\mathcal{R}}\alpha_{\mathcal{R}}=1$)
+and repeating the argument with the fractional congestion
+$C^{*}_{\mathbf{f}}(a,b):=\sum_{\{i,j\}\in\Pairs} f_{ij}(a,b)$ tightens
+the upper bound of Eq.~\eqref{eq:distortion} to
+$|E|\pi^{*}(G)/|\Pairs|$, where
+$\pi^{*}(G)=\min_{\mathbf{f}}\max_{\{a,b\}\in E} C^{*}_{\mathbf{f}}(a,b)\leq\pi(G)$
+is the fractional edge forwarding index, computable by a
+multicommodity-flow LP~\citep{leighton1999multicommodity}.
+
 % ============================================================
 \section{Hyperparameters}
 \label{app:hyperparams}
@@ -1036,7 +1161,7 @@ used for all experiments in Section~\ref{sec:experiments}. All values
 are held fixed across team sizes $n \in \{4, 8, 16, 100\}$ except as
 noted below.
 
-\begin{table}[t]
+\begin{table}[ht]
 \centering
 \begin{tabular}{ll}
 \toprule
