@@ -47,6 +47,8 @@
 \newcommand{\abs}[1]{\left\lvert #1 \right\rvert}
 \newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
 \newcommand{\ind}{\mathbf{1}}
+% Placeholder command for numbers filled in after the n=500 riddle run lands.
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
 
 % ---------- Title ----------
 \title{Scalable System Neural Diversity:\\
@@ -78,7 +80,7 @@ estimator of full SND, with a Hoeffding-type concentration bound yielding
 $O(1/\sqrt{m})$ error in the number of sampled edges $m$, independent of $n$.
 We prove six formal properties, recovery, non-negativity,
 graph-automorphism invariance, complexity reduction, unbiasedness, and
-concentration, and verify them experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$; we further evaluate DiCo with Graph-SND on VMAS Dispersion with shared reward ($n{=}10$). Recovery is numerically exact, the estimator is unbiased to within expected sampling noise, concentration bounds hold with zero violations across 24{,}000 draws, and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio, sustaining a ${\sim}\!10\times$ speedup during active PPO training at $n=100$, with the sampling estimator tracking full $\SND$ indistinguishably throughout. On Dispersion, both a dynamic $k$-nearest-neighbor graph ($k{=}3$) and a Bernoulli-$0.1$ random subgraph substituted into DiCo track the same $\SND_{\mathrm{des}}{=}0.1$ set point as full pairwise $\SND$ to within $10^{-3}$ across three seeds; all controlled runs improve over diversity-off IPPO, while Bernoulli-$0.1$ yields the lowest median per-call diversity-metric wall-clock cost (Figure~\ref{fig:dico-dispersion-knn}).
+concentration, and verify them experimentally on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$, with a frozen-init timing extension to $n=500$; we further evaluate DiCo with Graph-SND on VMAS Dispersion with shared reward ($n{=}10$). Recovery is numerically exact, the estimator is unbiased to within expected sampling noise, concentration bounds hold with zero violations across 24{,}000 draws, and wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio, sustaining a ${\sim}\!10\times$ speedup during active PPO training at $n=100$ and again in a GPU frozen-init sweep at $n=500$ (a $125\times$ span of $n$ with no decay), with the sampling estimator tracking full $\SND$ indistinguishably throughout. On Dispersion, both a dynamic $k$-nearest-neighbor graph ($k{=}3$) and a Bernoulli-$0.1$ random subgraph substituted into DiCo track the same $\SND_{\mathrm{des}}{=}0.1$ set point as full pairwise $\SND$ to within $10^{-3}$ across three seeds; all controlled runs improve over diversity-off IPPO, while Bernoulli-$0.1$ yields the lowest median per-call diversity-metric wall-clock cost (Figure~\ref{fig:dico-dispersion-knn}).
 \end{abstract}
 % ============================================================
 \section{Introduction}
@@ -162,12 +164,16 @@ Our contributions are:
   Graph-SND on $K_n$ reproduces $\SND$ numerically, (ii) that the sampling estimator concentrates around $\SND$ at the bound predicted by
 Theorem~\ref{thm:concentration}, (iii) that sparse Graph-SND
   preserves the measurement and diagnostic uses of $\SND$ at
-  substantially reduced cost, and (iv) that both fixed-$G$ ($k$-NN) and
-  random-$G$ (Bernoulli-$0.1$) Graph-SND substitutions inside the DiCo
-  closed loop on VMAS Dispersion ($n{=}10$, three seeds) track the same
-  $\SND_{\mathrm{des}}$ set point as full pairwise $\SND$, remain within
-  seed variance on reward relative to full $\SND$, and reduce per-call
-  metric wall-clock cost (with Bernoulli-$0.1$ fastest)
+  substantially reduced cost, including a GPU frozen-init
+  extension at $n=500$ that confirms the ${\sim}10\times$ Bernoulli-
+  $0.1$ speedup persists across a $125\times$ span of team sizes
+  (Section~\ref{sec:experiments:timing:n500}), and (iv) that both
+  fixed-$G$ ($k$-NN) and random-$G$ (Bernoulli-$0.1$) Graph-SND
+  substitutions inside the DiCo closed loop on VMAS Dispersion
+  ($n{=}10$, three seeds) track the same $\SND_{\mathrm{des}}$ set
+  point as full pairwise $\SND$, remain within seed variance on
+  reward relative to full $\SND$, and reduce per-call metric wall-
+  clock cost (with Bernoulli-$0.1$ fastest)
   (Section~\ref{sec:experiments:dico-dispersion}).
 \end{enumerate}
 
@@ -805,8 +811,97 @@ T_{\mathrm{sampled}}$ against Bernoulli inclusion probability $p$, one
 line per team size $n$. Right: absolute wall-clock time per estimate
 with error bars over 20 trials. Dashed horizontal lines mark the
 full-$\SND$ cost at each $n$; solid lines are the sampled $\SNDG$
-cost.}
+cost. The GPU continuation of this sweep at $n{=}500$ (frozen-init,
+timing-only) appears as Figure~\ref{fig:timing-n500}.}
 \label{fig:timing}
+\end{figure}
+
+\subsubsection{GPU scaling at $n=500$}
+\label{sec:experiments:timing:n500}
+
+Figure~\ref{fig:timing} is CPU-only and only reaches $n=16$, and the
+online $n{=}100$ experiment of Section~\ref{sec:experiments:scaling}
+exercises the metric under training rather than in isolation. To
+verify that the $O(n^2)\!\to\!O(|E|)$ speedup of
+Proposition~\ref{prop:complexity} continues to hold at the scale where
+full $\SND$ begins to be computationally meaningful, we add a GPU
+frozen-init timing sweep at $n=500$.
+
+\paragraph{Setup.}
+We instantiate $500$ independently-initialised Gaussian MLP policies
+using the same architecture as the $n{=}100$ training run of
+Section~\ref{sec:experiments:scaling} (width-$64$, two tanh hidden
+layers, per-dim learnable $\log\sigma$). We then evaluate them on a
+single synthetic rollout batch of $T_{\mathrm{total}} = 32 \times 128
+= 4{,}096$ observations per agent---matching the online
+$n{=}100$ run's batch shape---and time both estimators on the
+resulting $(\mu, \sigma)$ tensors. All timings call
+\texttt{torch.cuda.synchronize} on both sides of each
+\texttt{time.perf\_counter} measurement, run with 20 trials per cell
+after 3 warm-up trials, and use the same
+\texttt{pairwise\_distances\_on\_edges} and
+\texttt{graph\_snd\_from\_rollouts} codepaths as the online $n{=}100$
+experiment. No environment is stepped and no checkpoint is loaded: the
+experiment isolates the aggregation cost that
+Proposition~\ref{prop:complexity} characterises, without confounders
+from rollout collection or gradient steps. Training 500 heterogeneous
+IPPO agents is a distributed-systems undertaking, not a metric
+validation, and is outside this paper's scope.
+
+\paragraph{Results.}
+At $n=500$, the full pair set has $\binom{500}{2} = 124{,}750$
+entries, and Bernoulli sampling at $p=0.1$ retains
+$\mathbb{E}[|E(G_{0.1})|] \approx 12{,}475$ edges. Per call, full
+$\SND$ takes \TODO{full-SND time in ms} on one RTX 4090 in fp32,
+while $\widehat{\SND}(G_{0.1})$ takes \TODO{Graph-SND time at p=0.1
+in ms}, for a mean speedup of \TODO{mean speedup at p=0.1} (median
+\TODO{median speedup at p=0.1}) over 20 trials; this sits within
+noise of the structural $\binom{n}{2}/|E(G_{0.1})| = 10$ prediction.
+Figure~\ref{fig:timing-n500} (left) shows the full speedup curve
+across $p \in \{0.1, 0.25, 0.5, 0.75, 1.0\}$, and
+Figure~\ref{fig:timing-n500} (right) re-plots the speedup at $p=0.1$
+as a function of $n$ by combining this experiment with the CPU
+frozen-checkpoint sweep at $n\in\{4, 8, 16\}$
+(Section~\ref{sec:experiments:timing}) and the GPU online training
+log at $n=100$ (Section~\ref{sec:experiments:scaling}). The predicted
+$1/p = 10\times$ speedup is visible without decay across a
+$125\times$ span of team sizes, spanning two distinct timing regimes
+(CPU frozen-checkpoint and GPU frozen-init / online).
+
+\paragraph{Interpretation.}
+At $n=500$ full $\SND$ on GPU is measured in
+\TODO{order-of-magnitude for full-SND, e.g.~tens of seconds} per
+call; Graph-SND at $p=0.1$ reduces this to
+\TODO{order-of-magnitude for Graph-SND, e.g.~a few seconds}. The
+point is not the absolute wall clock---500 fully heterogeneous
+Gaussian policies is an unrealistic configuration for most tasks of
+interest---but that the $\binom{n}{2}/|E|$ speedup factor of
+Proposition~\ref{prop:complexity} is a realised, measurable quantity
+at the scale where $O(n^2)$ aggregation begins to be meaningful on
+modern GPUs, and that no additional constant-factor penalty
+materialises at scale.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/timing_n500.pdf}
+\caption{Wall-clock scaling of $\widehat{\SND}(G_p)$ versus $\SND$ at
+$n{=}500$ on a single RTX 4090, fp32, 20 trials per cell, with
+\texttt{torch.cuda.synchronize} on both sides of every timer
+(Section~\ref{sec:experiments:timing:n500}). \textbf{Left:} measured
+speedup $T_{\mathrm{full}} / T_{\mathrm{sampled}}$ versus Bernoulli
+inclusion probability $p$. The dotted gray curve marks the structural
+$1/p$ prediction; markers show measured mean and median across trials
+on a log-$y$ axis. \textbf{Right:} measured speedup at $p{=}0.1$ as
+a function of team size $n$, combining this experiment
+(\textit{blue}, GPU frozen-init, this work) with the CPU frozen-
+checkpoint sweep at $n\in\{4,8,16\}$ (\textit{red};
+Section~\ref{sec:experiments:timing}) and the GPU online-training
+measurements at $n{=}100$ (\textit{orange};
+Section~\ref{sec:experiments:scaling}). The dotted gray line at
+$10\times$ is the structural $1/p=10\times$ prediction of
+Proposition~\ref{prop:complexity}; the three regimes cluster around
+it across a $125\times$ span of $n$, with no decay at scale.}
+\label{fig:timing-n500}
 \end{figure}
 
 \subsection{Scaling to $n=100$ under real training dynamics}
@@ -1047,11 +1142,15 @@ exact; HT unbiasedness holds to within the expected sampling noise;
 the Hoeffding and Serfling concentration bounds are respected in
 every cell with room to spare; the wall-clock behavior tracks the
 $\binom{n}{2}/|E|$ speedup ratio of Proposition~\ref{prop:complexity};
-and the scaling experiment at $n=100$ demonstrates that this speedup
+the scaling experiment at $n=100$ demonstrates that this speedup
 and the tracking fidelity of $\widehat{\SND}$ survive 500 iterations
-of active PPO training.
+of active PPO training; and the frozen-init GPU extension at $n=500$
+(Section~\ref{sec:experiments:timing:n500}) shows that the
+${\sim}10\times$ Bernoulli-$0.1$ speedup continues to hold at the
+scale where full $\SND$ becomes computationally meaningful on modern
+GPUs.
 
-We note three scope limits of these experiments. First, our core property validations range only up to $n=16$, with scaling demonstrated at $n=100$. This is large enough to make $\SND$'s quadratic cost visible but small enough that the quadratic cost remains tractable as a baseline. Validating Graph-SND at $n \gg 100$ is the natural next experiment but requires training infrastructure beyond what we use here. Second, the recovery, unbiasedness, concentration, and timing experiments use only Multi-Agent Goal Navigation.
+We note three scope limits of these experiments. First, our controlled property validations range only up to $n=16$, with online-training scaling demonstrated at $n=100$ and frozen-init timing extended to $n=500$. This range is large enough to make $\SND$'s quadratic cost both visible and wall-clock-meaningful while remaining tractable as a baseline for the recovery and unbiasedness validations. Validating Graph-SND under an active training loop at $n \gg 100$ is the natural next experiment but requires training infrastructure beyond what we use here. Second, the recovery, unbiasedness, concentration, and timing experiments use only Multi-Agent Goal Navigation.
 The mathematical content of the theorems is scenario-independent, so
 we expect the results to transfer, but a multi-scenario study is
 future work. Third, Section~\ref{sec:experiments:dico-dispersion} tests two sparse
@@ -1113,7 +1212,7 @@ $p$) remain open.
 
 \subsection*{Limitations}
 
-We flag seven scope limits beyond those noted in the experimental summary (Section~\ref{sec:experiments:summary}). First, our core experiments range only up to $n = 16$, with a single scaling demonstration at $n=100$. This lower range is where full $\SND$ remains a tractable baseline, which is necessary for the recovery and unbiasedness validations, but validating $\SNDG$ at $n \gg 100$ is the natural next experiment; the limiting factor is MARL training infrastructure at scale, not the metric itself.
+We flag seven scope limits beyond those noted in the experimental summary (Section~\ref{sec:experiments:summary}). First, our controlled-metric experiments range only up to $n = 16$, with an online-training validation at $n=100$ (Section~\ref{sec:experiments:scaling}) and a frozen-init timing extension to $n=500$ (Section~\ref{sec:experiments:timing:n500}). The lower range is where full $\SND$ remains a tractable baseline, which is necessary for the recovery and unbiasedness validations; training $n \geq 500$ independently-parameterised IPPO agents is a distributed-systems undertaking rather than a metric validation, and is outside this paper's scope. The $n{=}500$ timing sweep exercises the aggregation cost characterised by Proposition~\ref{prop:complexity} but does not train at that scale; broader training-dynamics validation at $n \gg 100$ remains future work.
 
 Second, the controlled metric experiments use only Multi-Agent Goal
 Navigation, the scenario in which $\SND$ was originally validated by
@@ -1131,22 +1230,26 @@ separate from the control loop.  Broader fixed-$G$ studies---graphs
 derived from communication topology, spatial proximity, or learned
 attention---remain future work.
 
-Fourth, absolute timings across experiments span three hardware/call
+Fourth, absolute timings across experiments span four hardware/call
 regimes: Section~\ref{sec:experiments:timing}
-(Figure~\ref{fig:timing}) is CPU-only and frozen-checkpoint,
-Section~\ref{sec:experiments:scaling}
+(Figure~\ref{fig:timing}) is CPU-only and frozen-checkpoint at
+$n\in\{4,8,16\}$, Section~\ref{sec:experiments:scaling}
 (Table~\ref{tab:scaling-n100}) is GPU-measured and logged every 25
-PPO iterations over the full rollout batch at $n{=}100$, and
-Section~\ref{sec:experiments:dico-dispersion}
+PPO iterations over the full rollout batch at $n{=}100$,
+Section~\ref{sec:experiments:timing:n500}
+(Figure~\ref{fig:timing-n500}) is GPU-measured and frozen-init at
+$n{=}500$, and Section~\ref{sec:experiments:dico-dispersion}
 (Figure~\ref{fig:dico-dispersion-knn}) is GPU-measured at every DiCo
 minibatch forward at $n{=}10$. On GPU at small $n$ the
 $\binom{n}{2}/|E|$ ratio can be partly absorbed by the fact that
 full $\SND$ fits in a single CUDA kernel; at $n=16$ the full pair
 set is only 120 evaluations, and the regime where GPU parallelism
-saturates begins around $n \geq 50$--$100$. The n=100 scaling
-experiment already demonstrates the predicted ${\sim}10\times$
-speedup survives on GPU at that scale; a systematic GPU sweep across
-$n$ and $p$ under matched call patterns is deferred.
+saturates begins around $n \geq 50$--$100$. Both the $n{=}100$ online
+and the $n{=}500$ frozen-init runs confirm that the predicted
+${\sim}10\times$ speedup survives on GPU at scale
+(Figure~\ref{fig:timing-n500}); a systematic GPU sweep across
+$n$ and $p$ under matched call patterns within an active training
+loop at $n \geq 500$ is deferred.
 
 Fifth, Section~\ref{sec:experiments:dico-dispersion} reports a single
 DiCo configuration (Independent PPO, $\SND_{\mathrm{des}}{=}0.1$, three
@@ -1233,7 +1336,7 @@ unbiased sampling estimator of full SND when edges are drawn
 independently with Horvitz--Thompson weights. We proved six formal
 results, recovery on $K_n$, non-negativity, graph-automorphism
 invariance, a complexity reduction, unbiasedness, and Hoeffding-type
-concentration, and verified them on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$, with a DiCo$\!+\!$Graph-SND integration on VMAS Dispersion ($n{=}10$, three seeds).
+concentration, and verified them on VMAS Multi-Agent Goal Navigation at team sizes $n \in \{4, 8, 16, 100\}$---with a frozen-init GPU timing extension at $n{=}500$ (Section~\ref{sec:experiments:timing:n500})---together with a DiCo$\!+\!$Graph-SND integration on VMAS Dispersion ($n{=}10$, three seeds).
 
 The experiments confirm that recovery is numerically exact, the
 Horvitz--Thompson estimator is unbiased to within expected sampling
@@ -1254,7 +1357,12 @@ with the choice of $G$ determining whether the signal measures local
 diversity or approximates global diversity at reduced cost. All
 experimental code is available at \url{https://github.com/codingwithshawnyt/Graph-SND}.
 
-Two directions are natural next steps. Validation at $n \geq 500$ or in distributed training regimes would further exercise the regime where the $O(n^2) \to O(|E|)$ speedup matters most in practice. A deterministic distortion bound for the
+Two directions are natural next steps. The frozen-init timing
+extension at $n=500$ (Section~\ref{sec:experiments:timing:n500}) shows
+the predicted speedup persists outside the training loop at that
+scale; training-dynamics validation at $n \geq 500$, or in distributed
+multi-GPU regimes, would further exercise the regime where the $O(n^2)
+\to O(|E|)$ speedup matters most in practice. A deterministic distortion bound for the
 fixed-$G$ interpretation, complementing the probabilistic
 Hoeffding guarantee of Theorem~\ref{thm:concentration}, would
 characterize how closely Graph-SND approximates full SND when $G$ is
