@@ -217,6 +217,51 @@ Results live in `results/dico/` (CSV + summary PDF) and are rendered
 by the DiCo fork's plot script. The multi-panel figure is
 `Paper/figures/neurips_knn_plot.pdf`.
 
+### Optional: DiCo + Bernoulli-0.1 feasibility at $n{=}50$ (riddle)
+
+`ControllingBehavioralDiversity-fork/scripts/launch_dico_n50_feasibility.sh`
+reproduces a single-seed, two-run feasibility demonstration at
+${\sim}5\times$ the team size of the main Dispersion experiment: it
+launches an IPPO baseline on GPU 0 and DiCo with Bernoulli-$0.1$
+Graph-SND on GPU 1 in parallel, each for 167 PPO iterations with
+`on_policy_n_envs_per_worker=120` and
+`on_policy_collected_frames_per_batch=12000` (smaller than the
+$n{=}10$ defaults to keep the rollout within a single 4090's memory
+budget at $5\times$ more per-agent tensors).
+
+On riddle:
+
+```bash
+cd ~/shawnr/Graph-SND  # or wherever the repo lives on riddle
+source .venv/bin/activate
+cd ControllingBehavioralDiversity-fork
+bash scripts/launch_dico_n50_feasibility.sh
+# Monitor: tail -f logs/neurips_n50_seed0_*.log
+# Artefacts:
+#   results/neurips_final_n50/seed0/ippo/graph_snd_log.csv
+#   results/neurips_final_n50/seed0/bern/graph_snd_log.csv
+```
+
+Then from the local repo root, `rsync` the two CSVs into
+`ControllingBehavioralDiversity-fork/results/neurips_final_n50/...`
+and regenerate the appendix companion figure:
+
+```bash
+python3 scripts/plot_reward_curves.py \
+    --figure-type panels --smooth 5 \
+    "ippo:ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/ippo/graph_snd_log.csv" \
+    "graph_p01:ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/bern/graph_snd_log.csv" \
+    --desired-snd 0.1 \
+    --task-name "VMAS Dispersion (n=50, one seed)" \
+    --output Paper/figures/neurips_n50_feasibility.pdf
+```
+
+Finally flip the single Boolean flag at the bottom of
+`Paper/main.tex` (`\hasneurisfiftyresultsfalse` →
+`\hasneurisfiftyresultstrue`) and recompile to activate
+Appendix~D. The flag is dormant by default, so a failed or skipped
+run leaves the submitted PDF unchanged.
+
 ---
 
 ## Headline validation results

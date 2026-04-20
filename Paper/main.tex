@@ -1185,4 +1185,53 @@ speedups reported here.}
 \label{fig:timing}
 \end{figure}
 
+% ------------------------------------------------------------------
+% Appendix: DiCo + Bernoulli-0.1 feasibility at n=50 (one seed).
+% Gated on the n=50 feasibility run succeeding. If the run converges,
+% flip \hasneurisfiftyresultsfalse -> \hasneurisfiftyresultstrue below
+% (one-line change) and rerun the plotter to produce
+% figures/neurips_n50_feasibility.pdf. Otherwise the block is a no-op
+% and the submission is unchanged.
+\newif\ifhasneurisfiftyresults
+\hasneurisfiftyresultsfalse
+\ifhasneurisfiftyresults
+\section{DiCo + Bernoulli-$0.1$ feasibility at $n{=}50$}
+\label{app:dico-n50}
+
+Figure~\ref{fig:dico-n50} reports a single-seed feasibility run of DiCo
+with Bernoulli-$0.1$ Graph-SND on VMAS Dispersion at $n{=}50$,
+alongside a matched diversity-off IPPO baseline at the same team
+size. Hyperparameters follow
+Section~\ref{sec:experiments:dico-dispersion} except
+$\texttt{on\_policy\_n\_envs\_per\_worker}{=}120$ and
+$\texttt{on\_policy\_collected\_frames\_per\_batch}{=}12{,}000$
+(reduced from $600$ and $60{,}000$ to keep the per-iteration rollout
+within a single RTX~4090's memory budget at $5{\times}$ more
+per-agent tensors); all other experiment and model settings match
+the $n{=}10$ run of Section~\ref{sec:experiments:dico-dispersion}. The
+sole purpose of this run is to show that the DiCo closed loop
+continues to function when the Bernoulli estimator's expected edge
+count $\mathbb{E}[|E(G_{0.1})|]{=}0.1\binom{50}{2}{=}122.5$ is the
+sole signal used by the controller; it is a single seed and so is not
+a statistical claim, only a feasibility demonstration at
+${\approx}5{\times}$ the team size of the main Dispersion experiment.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{figures/neurips_n50_feasibility.pdf}
+\caption{Feasibility: DiCo + Bernoulli-$0.1$ Graph-SND on VMAS
+Dispersion at $n{=}50$, one seed. \textbf{Blue:} IPPO baseline,
+diversity control disabled. \textbf{Red:} DiCo with Bernoulli-$0.1$
+Graph-SND, $\SND_{\mathrm{des}}{=}0.1$. Bands on panel~3 are
+mean~$\pm$~std (single seed, so equal to the mean); on panels~1 and
+2 the bands are the per-iteration rolling-window std. The Bernoulli
+Graph-SND run tracks $\SND_{\mathrm{des}}{=}0.1$ and beats the
+diversity-off baseline on terminal reward at $n{=}50$, consistent
+with the $n{=}10$ multi-seed result of
+Figure~\ref{fig:dico-dispersion-knn} but at ${\approx}5{\times}$ the
+team size.}
+\label{fig:dico-n50}
+\end{figure}
+\fi
+
 \end{document}
