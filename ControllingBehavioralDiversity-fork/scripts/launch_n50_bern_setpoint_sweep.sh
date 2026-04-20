@@ -9,8 +9,9 @@
 # orphan but keep training.
 #
 # OOM handling: if the run exits with CUDA OOM (detected in the log), the same
-# cell is retried on the SAME physical GPU after a short sleep. Optionally
-# shrink ENV_N / FRAMES_PER_BATCH each attempt (OOM_SHRINK=1, default).
+# cell is retried on the SAME physical GPU after a short sleep, indefinitely
+# by default (MAX_OOM_RETRIES=0). Optionally shrink ENV_N / FRAMES_PER_BATCH
+# each attempt (OOM_SHRINK=1, default). Set MAX_OOM_RETRIES=N (N>0) to cap.
 #
 # Runs one training job at a time (sequential) so two sweeps never fight for
 # the same GPU memory on shared hosts; alternate GPUs with SWEEP_ALTERNATE_GPUS=1.
@@ -21,7 +22,8 @@
 #
 # Optional env:
 #   SNDS="0.12 0.14 0.15"   SEEDS="0 1 2"   RESULTS_BASE=...   MAX_ITERS=167
-#   MAX_OOM_RETRIES=8       OOM_RETRY_SLEEP_SEC=20   OOM_SHRINK=1   OOM_MIN_ENV_N=32
+#   MAX_OOM_RETRIES=0       # default 0 = unlimited OOM retries; set N>0 to cap at N attempts/cell
+#   OOM_RETRY_SLEEP_SEC=20   OOM_SHRINK=1   OOM_MIN_ENV_N=32
 #   SWEEP_GPU=0             # pin every cell to this GPU (ignore alternation)
 #   SWEEP_ALTERNATE_GPUS=1  # default: round-robin 0,1,0,1,... (set 0 to always use SWEEP_GPU)
 
@@ -51,7 +53,8 @@ N_FOOD="${N_FOOD:-${N_AGENTS}}"
 RESULTS_BASE="${RESULTS_BASE:-${ROOT}/results/neurips_final_n50_setpoint_sweep}"
 FORCE="${FORCE:-0}"
 
-MAX_OOM_RETRIES="${MAX_OOM_RETRIES:-8}"
+# 0 = unlimited OOM retries (same GPU); N>0 = stop after N attempts for that cell.
+MAX_OOM_RETRIES="${MAX_OOM_RETRIES:-0}"
 OOM_RETRY_SLEEP_SEC="${OOM_RETRY_SLEEP_SEC:-20}"
 OOM_SHRINK="${OOM_SHRINK:-1}"
 OOM_MIN_ENV_N="${OOM_MIN_ENV_N:-32}"
@@ -126,8 +129,9 @@ health() {
   return 0
 }
 
-# Run one (SEED, SND, GPU) cell until success or non-OOM failure or retries exhausted.
-# On OOM: same GPU, clear output dir, optional shrink env/batch, sleep, retry.
+# Run one (SEED, SND, GPU) cell until success or non-OOM failure.
+# On OOM: same GPU, clear output dir, optional shrink env/batch, sleep, retry forever
+# unless MAX_OOM_RETRIES>0 (then stop after that many attempts for this cell).
 run_cell_with_oom_retries() {
   local SEED="$1" DESIRED_SND="$2" GPU="$3"
   local TAG="${DESIRED_SND//./p}"
@@ -144,7 +148,7 @@ run_cell_with_oom_retries() {
   local eff_n="${ENV_N}"
   local eff_batch="${FRAMES_PER_BATCH}"
 
-  while ((attempt <= MAX_OOM_RETRIES)); do
+  while true; do
     rm -rf "$OUT"
     mkdir -p "$OUT"
     : >"${LOG}"
@@ -162,12 +166,16 @@ run_cell_with_oom_retries() {
     fi
 
     if log_is_oom "$LOG"; then
-      echo "[$(date -Is)] OOM seed=${SEED} snd=${DESIRED_SND} gpu=${GPU} attempt=${attempt}/${MAX_OOM_RETRIES} (env_n=${eff_n} batch=${eff_batch})" >&2
-      if ((attempt == MAX_OOM_RETRIES)); then
-        echo "ERROR: OOM retries exhausted for seed=${SEED} snd=${DESIRED_SND} gpu=${GPU}" >&2
-        tail -n 60 "$LOG" >&2 || true
-        return 1
+      local cap_msg="unlimited"
+      if ((MAX_OOM_RETRIES > 0)); then
+        cap_msg="${MAX_OOM_RETRIES}"
+        if ((attempt >= MAX_OOM_RETRIES)); then
+          echo "ERROR: OOM retries exhausted (MAX_OOM_RETRIES=${MAX_OOM_RETRIES}) seed=${SEED} snd=${DESIRED_SND} gpu=${GPU}" >&2
+          tail -n 60 "$LOG" >&2 || true
+          return 1
+        fi
       fi
+      echo "[$(date -Is)] OOM seed=${SEED} snd=${DESIRED_SND} gpu=${GPU} attempt=${attempt} (cap=${cap_msg}) env_n=${eff_n} batch=${eff_batch}" >&2
       if [[ "$OOM_SHRINK" == "1" ]]; then
         eff_n=$((eff_n * 3 / 4))
         ((eff_n < OOM_MIN_ENV_N)) && eff_n=${OOM_MIN_ENV_N}
@@ -183,9 +191,6 @@ run_cell_with_oom_retries() {
     tail -n 80 "$LOG" >&2 || true
     return 1
   done
-
-  echo "ERROR: exhausted attempts for seed=${SEED} snd=${DESIRED_SND}" >&2
-  return 1
 }
 
 read -r -a SNDS <<<"${SNDS:-0.12 0.14 0.15}"
