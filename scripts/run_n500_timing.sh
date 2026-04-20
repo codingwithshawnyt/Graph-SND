@@ -2,7 +2,7 @@
 # Graph-SND scaling experiment: frozen-init n=500 timing sweep.
 #
 # Runs experiments/exp2_timing_scaling.py on a single CUDA device with
-# the Section 6.6 GPU timing methodology (torch.cuda.synchronize on both
+# the paper's GPU frozen-init timing methodology (torch.cuda.synchronize on both
 # sides of each time.perf_counter measurement). No training, no
 # checkpoints; just the one-shot timing comparison of full SND vs
 # Graph-SND at p in {0.1, 0.25, 0.5, 0.75, 1.0} on frozen-init policies.
@@ -81,15 +81,20 @@ cmd=(
     "--out" "$csv_path"
 )
 
-echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] launching: ${cmd[*]}" | tee -a "$log_path"
-echo "  device  -> $DEVICE"
-echo "  n       -> $N_AGENTS"
-echo "  trials  -> $TRIALS (warmup=$WARMUP)"
-echo "  p       -> $P_VALUES"
-echo "  csv     -> $csv_path"
-echo "  summary -> ${csv_path%.csv}.summary.json"
-echo "  log     -> $log_path"
-echo "Detaching with nohup. Follow progress with:  tail -f $log_path"
+# Append *all* launcher lines to the log so `tail -f $log_path` works
+# even when the caller wraps this script in `nohup ... >/dev/null 2>&1`
+# (stdout from lines below would otherwise be discarded).
+{
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] launching: ${cmd[*]}"
+    echo "  device  -> $DEVICE"
+    echo "  n       -> $N_AGENTS"
+    echo "  trials  -> $TRIALS (warmup=$WARMUP)"
+    echo "  p       -> $P_VALUES"
+    echo "  csv     -> $csv_path"
+    echo "  summary -> ${csv_path%.csv}.summary.json"
+    echo "  log     -> $log_path"
+    echo "Detaching with nohup. Follow progress with:  tail -f $log_path"
+} >>"$log_path"
 
 nohup "${cmd[@]}" >>"$log_path" 2>&1 &
 pid=$!
