@@ -807,7 +807,11 @@ mask+$1/p$ reweighting for Bernoulli-$0.1$).}
 
 Graph-SND replaces the aggregation step of $\SND$ with a
 graph-parameterised construction that recovers $\SND$ exactly on
-$K_n$ and scales linearly in $|E|$. The two interpretations of
+$K_n$ and scales linearly in $|E|$. Because the graph layer only sees
+pairwise dissimilarities $d(i,j)$, the same construction is a generic
+sparsification template for pairwise-aggregate diversity metrics beyond
+the Gaussian-$\Wass$ SND instantiation (Appendix~\ref{app:verify},
+Table~\ref{tab:discrete-tvd-sanity}). The two interpretations of
 $\SNDG$ correspond to two commitments: a fixed $G$ is a
 \emph{modeling} commitment (only certain agent pairs matter, per
 Remark~\ref{rem:semantics}), while a random $G$ with
