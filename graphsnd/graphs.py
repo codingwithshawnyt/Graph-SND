@@ -8,8 +8,7 @@ We never store adjacency matrices: Graph-SND only reads ``D[i, j]`` for
 the pairs in the edge list, so the compact edge-list form is enough and
 scales linearly in ``|E|`` rather than quadratically in ``n``.
 
-Three graph families cover the paper's two interpretations of
-Graph-SND:
+Graph families:
 
 - ``complete_edges(n)``: all :math:`\\binom{n}{2}` pairs. Recovers full
   SND on ``K_n`` (Proposition 1).
@@ -19,9 +18,16 @@ Graph-SND:
 - ``uniform_size_edges(n, m, rng)``: exactly ``m`` edges drawn uniformly
   without replacement. The sampling-without-replacement setup for the
   concentration bound (Theorem 6 / Lemma 7).
+- ``random_regular_edges(n, d, rng)``: a random ``d``-regular graph.
+  Near-Ramanujan with high probability (Friedman 2003); used in the
+  expander sparsification ablation (Corollary 11).
+- ``knn_edges(features, k)``: k-nearest-neighbour graph over agent
+  feature vectors.
 
-A ``knn_edges`` placeholder is included so the signature is stable for
-the k-NN localized-measure experiments in a later paper iteration.
+Spectral utilities:
+
+- ``spectral_gap(n, edges)``: compute the second-largest eigenvalue
+  and spectral gap of the adjacency matrix induced by an edge list.
 """
 
 from __future__ import annotations
@@ -162,3 +168,88 @@ def knn_edges(features: Tensor, k: int, symmetric: bool = True) -> Tensor:
     if not symmetric:
         return edges
     return edges
+
+
+def random_regular_edges(n: int, d: int, rng: RngLike = None) -> Tensor:
+    """Random ``d``-regular graph edges via the configuration model.
+
+    Uses :func:`networkx.random_regular_graph` which samples uniformly
+    over the set of all ``d``-regular graphs on ``n`` vertices.
+    Friedman's theorem (2003) guarantees that the resulting graph is
+    nearly Ramanujan with high probability:
+    :math:`\\lambda_2 \\leq 2\\sqrt{d-1} + \\epsilon` for any
+    :math:`\\epsilon > 0` as ``n \\to \\infty``.
+
+    Parameters
+    ----------
+    n: number of agents (vertices).  Must satisfy ``n >= d + 1`` and
+        ``n * d`` must be even (necessary condition for a ``d``-regular
+        graph to exist).
+    d: degree of each vertex.  Must satisfy ``d >= 1``.
+    rng: ``numpy`` ``Generator``, ``int`` seed, or ``None``.
+
+    Returns
+    -------
+    LongTensor of shape ``(n*d/2, 2)`` with ``i < j`` ordering.
+    """
+    import networkx as nx
+
+    if n < 2:
+        raise ValueError(f"n must be >= 2; got n={n}")
+    if d < 1:
+        raise ValueError(f"d must be >= 1; got d={d}")
+    if d >= n:
+        raise ValueError(f"d must be < n; got d={d}, n={n}")
+    if (n * d) % 2 != 0:
+        raise ValueError(
+            f"n*d must be even for a d-regular graph to exist; "
+            f"got n={n}, d={d}, n*d={n*d}"
+        )
+    gen = _as_generator(rng)
+    seed = int(gen.integers(0, 2**31))
+    g = nx.random_regular_graph(d, n, seed=seed)
+    edge_list = sorted((min(u, v), max(u, v)) for u, v in g.edges())
+    return torch.tensor(edge_list, dtype=torch.long)
+
+
+def spectral_gap(n: int, edges: Tensor) -> tuple:
+    """Compute spectral properties of the adjacency matrix of a graph.
+
+    Builds the ``n x n`` symmetric adjacency matrix from the edge list
+    and returns the second-largest eigenvalue and related quantities.
+
+    Parameters
+    ----------
+    n: number of vertices.
+    edges: LongTensor of shape ``(|E|, 2)`` with ``i < j`` ordering.
+
+    Returns
+    -------
+    tuple of ``(lambda_2, gap, d_max, is_ramanujan)`` where
+
+    - ``lambda_2``: second-largest eigenvalue of the adjacency matrix.
+    - ``gap``: spectral gap ``1 - lambda_2 / d_max`` (``1.0`` if
+      ``d_max == 0``).
+    - ``d_max``: maximum degree of the graph.
+    - ``is_ramanujan``: ``True`` if ``lambda_2 <= 2*sqrt(d_max - 1)``
+      (the Ramanujan bound for ``d_max``-regular graphs).
+    """
+    if edges.numel() == 0:
+        return (0.0, 1.0, 0, True)
+
+    A = np.zeros((n, n), dtype=np.float64)
+    for k in range(edges.shape[0]):
+        i = int(edges[k, 0])
+        j = int(edges[k, 1])
+        A[i, j] = 1.0
+        A[j, i] = 1.0
+    eigenvalues = np.linalg.eigvalsh(A)
+    eigenvalues.sort()
+    d_max = int(A.sum(axis=0).max())
+    if d_max == 0:
+        return (0.0, 1.0, 0, True)
+    lambda_2 = float(eigenvalues[-2])
+    gap = 1.0 - lambda_2 / d_max
+    ramanujan_bound = 2.0 * np.sqrt(max(d_max - 1, 0))
+    is_ram = lambda_2 <= ramanujan_bound
+    return (lambda_2, gap, d_max, bool(is_ram))

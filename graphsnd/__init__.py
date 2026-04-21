@@ -12,6 +12,8 @@ from graphsnd.graphs import (
     bernoulli_edges,
     complete_edges,
     knn_edges,
+    random_regular_edges,
+    spectral_gap,
     uniform_size_edges,
 )
 from graphsnd.metrics import (
@@ -46,9 +48,11 @@ __all__ = [
     "load_batched_checkpoint",
     "pairwise_behavioral_distance",
     "pairwise_distances_on_edges",
+    "random_regular_edges",
     "save_batched_checkpoint",
     "serfling_bound",
     "snd",
+    "spectral_gap",
     "uniform_sample_estimator",
     "uniform_size_edges",
     "wasserstein_gaussian",

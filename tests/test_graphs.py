@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import torch
 
@@ -9,6 +11,8 @@ from graphsnd.graphs import (
     bernoulli_edges,
     complete_edges,
     knn_edges,
+    random_regular_edges,
+    spectral_gap,
     uniform_size_edges,
 )
 
@@ -98,3 +102,64 @@ def test_knn_edges_shape_and_undirected_union() -> None:
     # No duplicates
     pairs = {(int(a), int(b)) for a, b in edges.tolist()}
     assert len(pairs) == edges.shape[0]
+
+
+def test_random_regular_edges_shape_and_order() -> None:
+    rng = np.random.default_rng(42)
+    for n, d in [(10, 3), (20, 5), (50, 7)]:
+        edges = random_regular_edges(n, d, rng)
+        expected_num_edges = n * d // 2
+        assert edges.shape == (expected_num_edges, 2), (
+            f"n={n}, d={d}: expected {expected_num_edges} edges, "
+            f"got {edges.shape[0]}"
+        )
+        assert (edges[:, 0] < edges[:, 1]).all()
+        assert (edges >= 0).all() and (edges < n).all()
+        pairs = {(int(a), int(b)) for a, b in edges.tolist()}
+        assert len(pairs) == edges.shape[0]
+
+
+def test_random_regular_edges_d_regular() -> None:
+    rng = np.random.default_rng(99)
+    for n, d in [(10, 3), (20, 5), (30, 4)]:
+        edges = random_regular_edges(n, d, rng)
+        degree = [0] * n
+        for a, b in edges.tolist():
+            degree[a] += 1
+            degree[b] += 1
+        for v in range(n):
+            assert degree[v] == d, (
+                f"n={n}, d={d}: vertex {v} has degree {degree[v]}"
+            )
+
+
+def test_random_regular_edges_spectral_gap() -> None:
+    rng = np.random.default_rng(7)
+    for n, d in [(50, 5), (100, 7)]:
+        edges = random_regular_edges(n, d, rng)
+        lam2, gap, d_max, is_ram = spectral_gap(n, edges)
+        assert d_max == d, f"d_max={d_max} != d={d}"
+        assert gap > 0, f"spectral gap must be positive, got {gap}"
+        ramanujan_bound = 2.0 * math.sqrt(d - 1)
+        assert lam2 <= ramanujan_bound + 1.0, (
+            f"n={n}, d={d}: lambda_2={lam2:.4f} exceeds near-Ramanujan "
+            f"bound {ramanujan_bound + 1.0:.4f}"
+        )
+
+
+def test_random_regular_edges_invalid_inputs() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="d must be < n"):
+        random_regular_edges(5, 5, np.random.default_rng(0))
+    with pytest.raises(ValueError, match="n\\*d must be even"):
+        random_regular_edges(7, 3, np.random.default_rng(0))
+
+
+def test_spectral_gap_empty_graph() -> None:
+    edges = torch.empty((0, 2), dtype=torch.long)
+    lam2, gap, d_max, is_ram = spectral_gap(5, edges)
+    assert lam2 == 0.0
+    assert gap == 1.0
+    assert d_max == 0
+    assert is_ram is True
