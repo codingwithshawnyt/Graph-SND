@@ -1,0 +1,26 @@
+{
+  "config": {
+    "n_agents_list": [
+      50
+    ],
+    "num_envs": 32,
+    "rollout_steps": 128,
+    "obs_dim": 18,
+    "act_dim": 2,
+    "n_graph_seeds": 2,
+    "timing_trials": 1,
+    "device": "cpu",
+    "dtype": "float32",
+    "checkpoint": null,
+    "seed": 42
+  },
+  "elapsed_sec": 4.8081629276275635,
+  "rows_written": 24,
+  "per_n_summary": [
+    {
+      "n": 50,
+      "synthetic_expander_ratio_mean": 1.0000512201609009,
+      "synthetic_expander_ratio_recip_mean": 0.9999491164486253
+    }
+  ]
+}

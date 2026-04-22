@@ -95,3 +95,6 @@ ControllingBehavioralDiversity-fork/outputs/
 
 # ---------- Jupyter ----------
 .ipynb_checkpoints/
+
+# ---------- Claude Code scratch state ----------
+.claude/

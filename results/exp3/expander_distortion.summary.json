@@ -1,0 +1,44 @@
+{
+  "config": {
+    "n_agents_list": [
+      50,
+      100,
+      200,
+      500
+    ],
+    "num_envs": 32,
+    "rollout_steps": 128,
+    "obs_dim": 18,
+    "act_dim": 2,
+    "n_graph_seeds": 5,
+    "timing_trials": 10,
+    "device": "cuda:0",
+    "dtype": "float32",
+    "checkpoint": null,
+    "seed": 42
+  },
+  "elapsed_sec": 36927.134105205536,
+  "rows_written": 240,
+  "per_n_summary": [
+    {
+      "n": 50,
+      "synthetic_expander_ratio_mean": 1.0000143291212267,
+      "synthetic_expander_ratio_recip_mean": 0.9999859224146561
+    },
+    {
+      "n": 100,
+      "synthetic_expander_ratio_mean": 1.0000590600959898,
+      "synthetic_expander_ratio_recip_mean": 0.9999410187749481
+    },
+    {
+      "n": 200,
+      "synthetic_expander_ratio_mean": 1.0000187212749314,
+      "synthetic_expander_ratio_recip_mean": 0.9999812994552715
+    },
+    {
+      "n": 500,
+      "synthetic_expander_ratio_mean": 1.000035856202137,
+      "synthetic_expander_ratio_recip_mean": 0.9999641522679273
+    }
+  ]
+}

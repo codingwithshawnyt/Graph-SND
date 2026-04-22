@@ -81,26 +81,6 @@ def plot_panel_a(ax: plt.Axes, df: pd.DataFrame) -> None:
 
 
 def plot_panel_b(ax: plt.Axes, df: pd.DataFrame) -> None:
-    for gf, style in FAMILY_STYLES.items():
-        sub = df[(df["graph_family"] == gf) & (df["data_source"] == "synthetic")]
-        if sub.empty:
-            continue
-        ax.scatter(
-            sub["spectral_gap_mean"],
-            sub["ratio_recip_mean"],
-            marker=style["marker"],
-            color=style["color"],
-            label=style["label"],
-            s=30,
-        )
-    ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
-    ax.set_xlabel(r"Spectral gap  $1 - \lambda_2 / d$")
-    ax.set_ylabel(r"$\mathrm{SND}_G^{\mathrm{u}} \; / \; \mathrm{SND}$")
-    ax.legend(fontsize=7, loc="lower right")
-    ax.set_title("(b) Distortion vs spectral gap")
-
-
-def plot_panel_c(ax: plt.Axes, df: pd.DataFrame) -> None:
     sub = df[df["graph_family"] == "random_regular"]
     if sub.empty:
         return
@@ -122,11 +102,31 @@ def plot_panel_c(ax: plt.Axes, df: pd.DataFrame) -> None:
             alpha=0.4,
             linewidth=1,
         )
-    ax.set_xlabel("Degree  d")
-    ax.set_ylabel(r"$\pi(G)$  (measured)")
+    ax.set_xlabel("Degree d")
+    ax.set_ylabel(r"$\pi(G)$ (measured)")
     ax.set_yscale("log")
     ax.legend(fontsize=7)
-    ax.set_title(r"(c) Forwarding index $\pi(G)$ vs degree")
+    ax.set_title(r"(b) Forwarding index $\pi(G)$ vs degree")
+
+
+def plot_panel_c(ax: plt.Axes, df: pd.DataFrame) -> None:
+    for gf, style in FAMILY_STYLES.items():
+        sub = df[(df["graph_family"] == gf) & (df["data_source"] == "synthetic")]
+        if sub.empty:
+            continue
+        ax.scatter(
+            sub["spectral_gap_mean"],
+            sub["ratio_recip_mean"],
+            marker=style["marker"],
+            color=style["color"],
+            label=style["label"],
+            s=30,
+        )
+    ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
+    ax.set_xlabel(r"Spectral gap $1 - \lambda_2 / d$")
+    ax.set_ylabel(r"$\mathrm{SND}_G^{\mathrm{u}} \; / \; \mathrm{SND}$")
+    ax.legend(fontsize=7, loc="lower right")
+    ax.set_title("(c) Distortion vs spectral gap")
 
 
 def plot_panel_d(ax: plt.Axes, df: pd.DataFrame) -> None:

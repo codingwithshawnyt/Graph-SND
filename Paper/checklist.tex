@@ -11,7 +11,9 @@
     with the downstream DiCo integration flagged separately, and each
     claim is numbered and cross-referenced. The scope restrictions
     (IPPO only, VMAS Multi-Agent Goal Navigation and Dispersion, fixed
-    Gaussian policies, single DiCo set point) are stated in
+    Gaussian policies; the main DiCo experiment is at a single set
+    point $\SND_{\mathrm{des}}{=}0.1$, with a three-seed, three-set-point
+    sweep at $n{=}50$ in Appendix~\ref{app:dico-n50-sweep}) are stated in
     Section~\ref{sec:discussion} (Limitations) and do not contradict
     any claim in the abstract or introduction.
 
@@ -55,7 +57,14 @@
     shape, timing regime (\texttt{torch.cuda.synchronize} on both
     sides of every \texttt{perf\_counter}), number of trials, number
     of seeds, and configuration of the $k$-NN graph and the Bernoulli
-    random graph. Everything needed to reconstruct the code paths is
+    random graph. The $n{=}50$ set-point sweep
+    (Appendix~\ref{app:dico-n50-sweep}) reuses these hyperparameters
+    except for the reduced per-iteration rollout
+    (\texttt{on\_policy\_n\_envs\_per\_worker}${=}120$,
+    \texttt{on\_policy\_collected\_frames\_per\_batch}${=}12{,}000$)
+    and is driven by
+    \texttt{ControllingBehavioralDiversity-fork/scripts/launch\_n50\_bern\_setpoint\_sweep.sh}.
+    Everything needed to reconstruct the code paths is
     in \texttt{graphsnd/metrics.py}, \texttt{graphs.py},
     \texttt{training/train\_navigation\_batched.py}, and
     \texttt{experiments/exp2\_timing\_scaling.py} in the companion
@@ -88,7 +97,11 @@
     specifies the HetControl architecture, $\SND_{\mathrm{des}}{=}0.1$
     set point, $167$-iteration budget, three seeds, $k{=}3$ for the
     $k$-NN graph, Bernoulli inclusion probability $p{=}0.1$, and the
-    $128$-env subsample used for the $k$-NN construction.
+    $128$-env subsample used for the $k$-NN construction. The
+    supplementary $n{=}50$ set-point sweep
+    (Appendix~\ref{app:dico-n50-sweep}) uses the same $167$-iteration
+    budget, three seeds per cell, $p{=}0.1$, and three set points
+    $\SND_{\mathrm{des}}\in\{0.12,0.14,0.15\}$.
 
 \item {\bf Experiment statistical significance}
     \item[] Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments?
@@ -107,6 +120,12 @@
     The DiCo experiment (Section~\ref{sec:experiments:dico-dispersion})
     reports mean $\pm$ standard deviation over three seeds for reward
     and applied SND, and median with IQR for per-call metric cost.
+    The $n{=}50$ set-point sweep (Appendix~\ref{app:dico-n50-sweep},
+    Table~\ref{tab:dico-n50-sweep}) reports late-window (last
+    $50$ iterations) means $\pm$ cross-seed standard error over three
+    seeds per set point and the relative tracking error
+    $\overline{|\mathrm{applied}\;\SND-\SND_{\mathrm{des}}|}/
+    \SND_{\mathrm{des}}$.
 
 \item {\bf Experiments compute resources}
     \item[] Question: For each experiment, does the paper provide sufficient information on the computer resources needed to reproduce the experiments?
@@ -121,8 +140,12 @@
     closed-loop experiment
     (Section~\ref{sec:experiments:dico-dispersion}) also
     runs on one RTX~4090 at the reported $167$-iteration budget.
+    The supplementary $n{=}50$ set-point sweep
+    (Appendix~\ref{app:dico-n50-sweep}, nine cells of three seeds
+    $\times$ three set points) runs sequentially on one RTX~4090 at
+    ${\approx}2$ GPU-hours per cell (${\approx}18$ GPU-hours total).
     Total compute for the experiments reported in this paper is
-    under $24$ GPU-hours on one RTX~4090 plus a few CPU-hours for
+    under $48$ GPU-hours on one RTX~4090 plus a few CPU-hours for
     the $n{\in}\{4,8,16\}$ benchmarks.
 
 \item {\bf Code of ethics}
