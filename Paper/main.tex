@@ -897,6 +897,19 @@ graphs the distortion is $\mathcal{O}(1)$ at
 $|E|{=}\Theta(n\log n)$, delivering a deterministic near-linear-cost
 approximation of an $\mathcal{O}(n^2)$ metric}.
 
+\paragraph{Discrete-action instantiation (categorical + TVD).}
+To surface the distance-agnostic claim in the main experimental
+story, we also run a synthetic discrete-action sanity check with
+categorical policies and total-variation distance (TVD) as $d(i,j)$
+(full protocol and table in Appendix~\ref{app:verify},
+Table~\ref{tab:discrete-tvd-sanity}). Across $2{,}000$ Bernoulli draws
+per $p\in\{0.1,0.3,0.5\}$, empirical bias remains near zero
+($|\mathrm{bias}|\le 7.48\times 10^{-4}$) and the Hoeffding violation
+rate at $\delta{=}0.1$ is zero in all cells. This is not a new RL
+benchmark claim; it is a direct sanity check that the same
+unbiasedness/concentration guarantees transfer to a non-Gaussian
+distance without changing the graph-aggregation layer.
+
 \begin{figure}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/expander_distortion_main.pdf}
@@ -939,6 +952,18 @@ The most immediate downstream application is DiCo
 \citep{bettini2024dico}: $\SNDG$ drops in as the control target, with
 $G$ selecting between local diversity control and a compute-subsampled
 variant, as validated on VMAS Dispersion.
+
+\paragraph{Practical graph-selection rule.}
+The experiments now support a simple decision rule for choosing $G$.
+Use Bernoulli graphs when the goal is unbiased approximation of full
+$\SND$ at the lowest runtime cost (sampling-estimator regime); use
+structured fixed graphs (e.g., $k$-NN or communication topologies) when
+the goal is local-semantic diversity over task-relevant interactions
+(modeling regime); use random $d$-regular expanders when a
+\emph{deterministic} sparse approximation is required, since they
+deliver near-unit empirical ratios at $|E|{=}\Theta(n\log n)$ while
+maintaining low forwarding index and strong distortion behavior
+relative to matched-edge baselines.
 
 \paragraph{Limitations.}
 We flag five scope limits.
