@@ -87,7 +87,13 @@ Graph-Based Local Aggregation and Sampling-Based Estimation}
 \maketitle
 
 \begin{abstract}
-System Neural Diversity (SND) quantifies behavioral heterogeneity in
+Graph-SND provides a deterministic expander-sparsification of pairwise
+diversity aggregation: random $d$-regular expanders achieve
+$\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ at
+$|E|{=}\Theta(n\log n)$ across $n\in\{50,100,200,500\}$, with
+$2$--$39\times$ lower forwarding index than matched-edge sparse
+baselines and persistence on a trained $n{=}100$ checkpoint. System
+Neural Diversity (SND) quantifies behavioral heterogeneity in
 multi-agent RL by averaging pairwise Wasserstein distances over all
 $\binom{n}{2}$ agent pairs, scaling as $O(n^2)$; its authors flag
 sparse-graph generalizations as open. We introduce Graph-SND, a
@@ -172,6 +178,14 @@ error bound in the number of sampled edges $m$, independent of $n$:
 $\SND$ can be approximated to target precision $\varepsilon$ using
 $O(\varepsilon^{-2}\log(1/\delta))$ distance evaluations.
 
+Empirically, the most distinctive fixed-$G$ finding is that
+$d$-regular expander choices of $G$ deliver deterministic
+near-linear-cost approximation with near-unit ratios
+$\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ at
+$|E|{=}\Theta(n\log n)$ across $n\in\{50,100,200,500\}$, with
+substantially lower forwarding index than matched-edge Bernoulli,
+uniform, and $k$-NN baselines.
+
 \paragraph{Contributions.}
 (i) A graph-structured generalisation $\SNDG$
 (Definition~\ref{def:graph-snd}) that subsumes $\SND$ on the
@@ -223,6 +237,10 @@ distributions via Jensen--Shannon \citep{lupu2021trajedi}. SND
 Gaussian continuous-action policies, satisfying statistical-metric
 axioms, and applying to concurrently-acting teams; it still
 aggregates over all $\binom{n}{2}$ pairs, as do the metrics above.
+None of \citet{parker-holder2020effective},
+\citet{mckee2022diversity}, or \citet{lupu2021trajedi} constructs a
+deterministic graph-sparsification bound in terms of forwarding index
+or multicommodity-flow structure.
 Our contribution is at this aggregation step: Graph-SND generalises
 the uniform pair average to an arbitrary weighted mean over the edges
 of a graph, preserving the closed-form Wasserstein distance of SND.
@@ -563,6 +581,10 @@ partially trained checkpoint (iter 100). We then report a 500-iteration
 PPO scaling run at $n=100$, and finally a closed-loop integration of
 Graph-SND into the DiCo diversity controller \citep{bettini2024dico}
 on VMAS Dispersion (Section~\ref{sec:experiments:dico-dispersion}).
+Measurement is demonstrated to $n{=}500$ (frozen-policy timing and
+expander ablation), while training is demonstrated to $n{=}100$ for
+online PPO and to $n{=}50$ for DiCo set-point control
+(Appendix~\ref{app:dico-n50-sweep}).
 
 \subsection{Setup}
 \label{sec:experiments:setup}
@@ -954,18 +976,23 @@ $G$ selecting between local diversity control and a compute-subsampled
 variant, as validated on VMAS Dispersion.
 
 \paragraph{Practical graph-selection rule.}
-The experiments now support a simple decision rule for choosing $G$.
-Use Bernoulli graphs when the goal is unbiased approximation of full
-$\SND$ at the lowest runtime cost (sampling-estimator regime); use
-structured fixed graphs (e.g., $k$-NN or communication topologies) when
-the goal is local-semantic diversity over task-relevant interactions
-(modeling regime); use random $d$-regular expanders when a
-\emph{deterministic} sparse approximation is required, since they
-deliver near-unit empirical ratios
-($\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$) at
-$|E|{=}\Theta(n\log n)$ while achieving $2$--$39\times$ lower
-forwarding index than matched-edge baselines
-(Section~\ref{sec:experiments:expander}).
+\begin{table}[t]
+\centering
+\small
+\caption{Decision rule for choosing $G$ in practice.}
+\label{tab:graph-selection-rule}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{p{0.12\linewidth}p{0.16\linewidth}p{0.15\linewidth}p{0.26\linewidth}p{0.20\linewidth}}
+\toprule
+Goal & Graph choice & Theorem support & When to use & Cost profile \\
+\midrule
+Estimation of full $\SND$ & Bernoulli-$p$ random graph & Prop.~\ref{prop:unbiased}, Thm.~\ref{thm:concentration} & Unbiased, compute-cheap estimate of global pairwise diversity & $\E[|E|]=p\binom{n}{2}$; speedup tracks $\approx1/p$ \\
+Modeling local semantics & Structured fixed graph ($k$-NN, communication topology) & Prop.~\ref{prop:nonneg}, Remark~\ref{rem:semantics} & Only task-relevant interactions should contribute to diversity & $|E|$ set by structure; interpretable local signal \\
+Deterministic sparse approximation & Random $d$-regular expander ($d=\Theta(\log n)$) & Thm.~\ref{thm:distortion}, Cor.~\ref{cor:expander-distortion} & Deterministic fixed-$G$ approximation with strong worst-case structure & $|E|=\Theta(n\log n)$; ratio in $[0.9987,1.0013]$ and $2$--$39\times$ lower $\pi(G)$ vs matched-edge baselines \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
 
 \paragraph{Limitations.}
 We flag five scope limits.
@@ -1012,10 +1039,12 @@ with a normalised weighted mean over the edges of a user-specified
 graph $G$: a localised diversity measure for fixed $G$, and an
 unbiased Horvitz--Thompson sampling estimator of $\SND$ for random
 $G$. Seven formal results and experiments across
-$n\in\{4,8,16,100,250,500\}$ on VMAS Goal Navigation and a DiCo closed
-loop on Dispersion confirm that $\SNDG$ is a drop-in replacement for
-$\SND$: recovery is numerically exact, concentration is respected on
-every cell, wall-clock cost tracks $\binom{n}{2}/|E|$ across a
+$n\in\{4,8,16,100,250,500\}$ on VMAS Goal Navigation (measurement to
+$n{=}500$) plus online training at $n{=}100$ and DiCo control on
+Dispersion (main: $n{=}10$, supplementary: $n{=}50$) confirm that
+$\SNDG$ is a drop-in replacement for $\SND$: recovery is numerically
+exact, concentration is respected on every cell, wall-clock cost tracks
+$\binom{n}{2}/|E|$ across a
 $125\times$ span of $n$, and both $k$-NN and Bernoulli-$0.1$
 substitutions inside DiCo match the full-$\SND$ set point to within
 $10^{-3}$ and full-$\SND$ reward within seed variance. The choice of
