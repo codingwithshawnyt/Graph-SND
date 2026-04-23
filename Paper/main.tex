@@ -961,9 +961,11 @@ structured fixed graphs (e.g., $k$-NN or communication topologies) when
 the goal is local-semantic diversity over task-relevant interactions
 (modeling regime); use random $d$-regular expanders when a
 \emph{deterministic} sparse approximation is required, since they
-deliver near-unit empirical ratios at $|E|{=}\Theta(n\log n)$ while
-maintaining low forwarding index and strong distortion behavior
-relative to matched-edge baselines.
+deliver near-unit empirical ratios
+($\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$) at
+$|E|{=}\Theta(n\log n)$ while achieving $2$--$39\times$ lower
+forwarding index than matched-edge baselines
+(Section~\ref{sec:experiments:expander}).
 
 \paragraph{Limitations.}
 We flag five scope limits.
