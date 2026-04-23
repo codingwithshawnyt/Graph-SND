@@ -223,20 +223,10 @@ def build_checkpoint_rollouts(
     dtype: torch.dtype,
     cfg: ExpConfig,
 ) -> Tuple[torch.Tensor, torch.Tensor, int]:
-    ckpt = torch.load(ckpt_path, map_location="cpu")
-    n_agents = ckpt["n_agents"]
-    ckpt_config = ckpt["config"]
-
-    policy_cfg = PolicyConfig(
-        obs_dim=ckpt_config["obs_dim"],
-        act_dim=ckpt_config["act_dim"],
-        hidden_sizes=tuple(ckpt_config["hidden_sizes"]),
-        u_range=ckpt_config["u_range"],
-    )
-    policy = BatchedGaussianMLPPolicy(
-        n_agents=n_agents, config=policy_cfg, seed_base=cfg.seed
-    ).to(device=device, dtype=dtype)
-    load_batched_checkpoint(policy, ckpt)
+    policy, _, _ = load_batched_checkpoint(ckpt_path, map_location="cpu")
+    n_agents = policy.n_agents
+    policy_cfg = policy.config
+    policy = policy.to(device=device, dtype=dtype)
     policy.eval()
 
     T_total = cfg.num_envs * cfg.rollout_steps
