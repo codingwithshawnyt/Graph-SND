@@ -110,7 +110,11 @@ $n\in\{100,250,500\}$: recovery is numerically exact, the concentration
 bound holds with zero violations across $24{,}000$ draws, and
 wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio,
 sustaining $\sim\!10\times$ at $p{=}0.1$ across a $125\times$ span of
-$n$ and three hardware/call regimes. On VMAS Dispersion ($n{=}10$,
+$n$ and three hardware/call regimes. In a deterministic fixed-$G$
+expander ablation, random $d$-regular graphs achieve
+$\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ at
+$|E|{=}\Theta(n\log n)$ across $n\in\{50,100,200,500\}$, and this
+ordering persists on a trained $n{=}100$ checkpoint. On VMAS Dispersion ($n{=}10$,
 three seeds), substituting either a $k{=}3$ $k$-NN graph or a
 Bernoulli-$0.1$ random subgraph for full SND inside the DiCo
 diversity controller matches the $\SND_{\mathrm{des}}{=}0.1$ set point
@@ -144,6 +148,9 @@ work has used SND as a control target
 \citep{bettini2024impact, tessera2024hypermarl}, and as the object
 of analytical diversity-benefit studies \citep{amir2025diversity},
 but to our knowledge has not addressed the $O(n^2)$ aggregation cost.
+To our knowledge, no prior pairwise-diversity metric in MARL reports a
+deterministic expander-sparsification result tied to forwarding-index /
+multicommodity-flow structure.
 
 This paper does. We define Graph-SND, a graph-structured
 generalisation that computes pairwise distances only on the edges of
@@ -187,12 +194,17 @@ frozen-init), and DiCo closed-loop integration on VMAS Dispersion
 ($n{=}10$, three seeds) where both $k$-NN (fixed-$G$) and
 Bernoulli-$0.1$ (random-$G$) Graph-SND substitutions track the
 full-$\SND$ set point and match full-$\SND$ reward within seed
-variance at reduced per-call cost.
+variance at reduced per-call cost, plus a deterministic expander
+ablation showing near-unit relative error
+($\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$) at
+$|E|{=}\Theta(n\log n)$ across $n\in\{50,100,200,500\}$, including a
+trained $n{=}100$ checkpoint panel.
 The construction is deliberately narrow: we do not propose a new
 training algorithm, policy architecture, or diversity-inducing
-objective, only a drop-in replacement for the aggregation step of
-SND that is cheaper at scale and retains the properties of SND that
-matter in practice.
+objective; we propose a drop-in replacement for SND aggregation that is
+both computationally cheaper and, with expander choices of $G$, a
+deterministic near-linear-cost approximation of pairwise diversity
+aggregates.
 
 % ============================================================
 \section{Related Work}
@@ -537,15 +549,14 @@ Jensen--Shannon divergence without changing the graph-aggregation logic.
 \section{Experiments}
 \label{sec:experiments}
 
-We validate the four core claims (Theorem~\ref{thm:distortion} is a
-deterministic structural bound proved in Appendix~\ref{app:proofs}; it
-is not part of the empirical validation below) of
+We validate the four core claims of
 Sections~\ref{sec:method} and~\ref{sec:theory} on VMAS Multi-Agent Goal Navigation
 \citep{bettini2022vmas}, the same didactic scenario used in
 \citet{bettini2025snd} to illustrate how SND varies with goal
 assignment. The experiment is intentionally narrow: our contribution is
-a measurement tool, so the experiments are designed to verify that tool
-rather than to demonstrate new training outcomes. All four validations of the core theory share a single code path and
+an aggregation-and-sparsification method, so the experiments are
+designed to verify metric guarantees and structural approximation
+behavior rather than to introduce a new RL training objective. All four validations of the core theory share a single code path and
 a single set of trained policies; we run them at team sizes $n \in
 \{4, 8, 16\}$ on both a random-init checkpoint (iter 0) and a
 partially trained checkpoint (iter 100). We then report a 500-iteration
