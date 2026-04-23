@@ -837,6 +837,11 @@ forwarding index $\pi(G)$ via BFS shortest-path congestion
 ($n$~BFS calls, sub-second at $n{=}500$).
 Configurations with $\SND{<}10^{-8}$ are skipped; both the ratio and
 absolute distortion $|\SND-\SNDG^{\mathrm{u}}|$ are reported.
+As a regime-transfer check (same graph families and edge budgets,
+single trained checkpoint), we also run a supplementary $n{=}100$
+panel on policies loaded from the overnight
+\texttt{n100\_overnight\_iter500.metric.pt} checkpoint
+(Appendix~\ref{app:expander-extra}, Figure~\ref{fig:expander-distortion-checkpoint}).
 
 \paragraph{Results.}
 Figure~\ref{fig:expander-distortion} summarises the experiment.
@@ -865,7 +870,12 @@ The theoretical upper bound $|E|\pi(G)/|\Pairs|$ is verified to
 contain the empirical ratio in every configuration.
 Additional panels (distortion vs spectral gap, cost--accuracy Pareto)
 appear in Figure~\ref{fig:expander-distortion-appendix} of
-Appendix~\ref{app:expander-extra}.
+Appendix~\ref{app:expander-extra}. On the trained-policy $n{=}100$
+supplementary panel, the same structural ordering remains: the
+$d$-regular family stays tightly concentrated around unit ratio
+($\SNDG^{\mathrm{u}}/\SND\in[0.9986,1.0022]$), while Bernoulli and
+uniform stay close and $k$-NN exhibits the largest spread at matched
+edge budgets (Figure~\ref{fig:expander-distortion-checkpoint}).
 
 In summary: \emph{the worst-case $\mathcal{O}(\log n)$ bound is
 structurally correct but conservative in practice; on near-Ramanujan
@@ -1551,6 +1561,23 @@ $1{-}\lambda_2/d$ across four graph families.
 \textbf{(d)}~Absolute distortion $|\SND{-}\SNDG^{\mathrm{u}}|$ vs
 graph-SND wall-clock time, showing the cost--accuracy Pareto frontier.}
 \label{fig:expander-distortion-appendix}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/expander_distortion_n100_checkpoint.pdf}
+\caption{\textbf{Expander ablation, trained-policy transfer at $n{=}100$
+(supplementary).}
+\textbf{(e)}~At matched edge budgets, the distortion ratio
+$\SNDG^{\mathrm{u}}/\SND$ for synthetic rollouts (solid) and a trained
+checkpoint rollout (dashed) remains near~$1$, with the $d$-regular
+family staying most tightly concentrated around unit ratio.
+\textbf{(f)}~Cost--accuracy points for synthetic vs trained rollouts:
+absolute distortion shifts upward under the larger trained-policy
+$\SND$ scale, while the graph-family ordering and timing structure
+remain consistent with the structural mechanism of
+Theorem~\ref{thm:distortion}.}
+\label{fig:expander-distortion-checkpoint}
 \end{figure}
 
 \end{document}

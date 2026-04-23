@@ -1,34 +1,28 @@
 {
-  "config": {
-    "n_agents_list": [
-      50,
-      100,
-      200,
-      500
-    ],
-    "num_envs": 32,
-    "rollout_steps": 128,
-    "obs_dim": 18,
-    "act_dim": 2,
-    "n_graph_seeds": 5,
-    "timing_trials": 10,
-    "device": "cuda:0",
-    "dtype": "float32",
-    "checkpoint": null,
-    "seed": 42
+  "note": "merged synthetic sweep with n=100 checkpoint panel",
+  "rows_written": 300,
+  "data_source_counts": {
+    "synthetic": 240,
+    "checkpoint": 60
   },
-  "elapsed_sec": 36927.134105205536,
-  "rows_written": 240,
+  "n_values": [
+    50,
+    100,
+    200,
+    500
+  ],
   "per_n_summary": [
     {
       "n": 50,
       "synthetic_expander_ratio_mean": 1.0000143291212267,
-      "synthetic_expander_ratio_recip_mean": 0.9999859224146561
+      "synthetic_expander_ratio_recip_mean": 0.999985922414656
     },
     {
       "n": 100,
+      "checkpoint_expander_ratio_mean": 0.99983374498705,
+      "checkpoint_expander_ratio_recip_mean": 1.00016692524707,
       "synthetic_expander_ratio_mean": 1.0000590600959898,
-      "synthetic_expander_ratio_recip_mean": 0.9999410187749481
+      "synthetic_expander_ratio_recip_mean": 0.999941018774948
     },
     {
       "n": 200,

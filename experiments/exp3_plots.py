@@ -180,58 +180,70 @@ def main() -> None:
     print(f"Appendix figure -> {app_path}")
 
     # Optional: when trained-policy checkpoint rows are present (n=100),
-    # emit a small side-by-side panel to compare synthetic vs checkpoint.
-    ckpt = df_raw[df_raw["data_source"] == "checkpoint"].copy()
+    # emit a side-by-side panel comparing synthetic vs checkpoint
+    # statistics at matched edge budgets.
+    ckpt = df[(df["data_source"] == "checkpoint") & (df["n"] == 100)].copy()
     if not ckpt.empty:
-        synth = df_raw[
-            (df_raw["data_source"] == "synthetic")
-            & (df_raw["n"] == 100)
-            & (df_raw["graph_seed"] == df_raw["graph_seed"].min())
-        ].copy()
+        synth = df[(df["data_source"] == "synthetic") & (df["n"] == 100)].copy()
         fig_ck, axes = plt.subplots(1, 2, figsize=(10, 4))
         for gf, style in FAMILY_STYLES.items():
-            s1 = synth[synth["graph_family"] == gf]
-            s2 = ckpt[ckpt["graph_family"] == gf]
+            s1 = synth[synth["graph_family"] == gf].sort_values("edge_fraction")
+            s2 = ckpt[ckpt["graph_family"] == gf].sort_values("edge_fraction")
             if not s1.empty:
-                axes[0].plot(
+                axes[0].errorbar(
                     s1["edge_fraction"],
-                    s1["ratio_reciprocal"],
+                    s1["ratio_recip_mean"],
+                    yerr=s1["ratio_recip_std"].fillna(0),
                     marker=style["marker"],
                     color=style["color"],
                     linestyle="-",
                     alpha=0.6,
+                    capsize=2,
                     label=f"{style['label']} (synthetic)",
                 )
             if not s2.empty:
-                axes[0].plot(
+                axes[0].errorbar(
                     s2["edge_fraction"],
-                    s2["ratio_reciprocal"],
+                    s2["ratio_recip_mean"],
+                    yerr=s2["ratio_recip_std"].fillna(0),
                     marker=style["marker"],
                     color=style["color"],
                     linestyle="--",
+                    capsize=2,
                     label=f"{style['label']} (checkpoint)",
                 )
+            if not s1.empty:
                 axes[1].scatter(
-                    s2["time_graph_ms"],
-                    s2["abs_distortion"],
+                    s1["time_graph_ms"],
+                    s1["abs_distortion_mean"],
                     marker=style["marker"],
                     color=style["color"],
-                    s=40,
-                    label=style["label"],
+                    s=30,
+                    alpha=0.6,
+                    label=f"{style['label']} (synthetic)",
+                )
+            if not s2.empty:
+                axes[1].scatter(
+                    s2["time_graph_ms"],
+                    s2["abs_distortion_mean"],
+                    marker=style["marker"],
+                    color=style["color"],
+                    s=35,
+                    label=f"{style['label']} (checkpoint)",
                 )
         axes[0].axhline(1.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
         axes[0].set_xscale("log")
         axes[0].set_xlabel("Edge fraction  |E| / |P|")
         axes[0].set_ylabel(r"$\mathrm{SND}_G^{\mathrm{u}} \; / \; \mathrm{SND}$")
-        axes[0].set_title("(a) n=100 synthetic vs checkpoint")
+        axes[0].set_title("(e) n=100 synthetic vs checkpoint")
         axes[0].legend(fontsize=6, loc="lower right")
 
         axes[1].set_xscale("log")
         axes[1].set_yscale("log")
         axes[1].set_xlabel("Graph-SND time (ms)")
         axes[1].set_ylabel(r"$|\mathrm{SND} - \mathrm{SND}_G^{\mathrm{u}}|$")
-        axes[1].set_title("(b) n=100 checkpoint cost-accuracy")
-        axes[1].legend(fontsize=7, loc="upper right")
+        axes[1].set_title("(f) n=100 checkpoint cost-accuracy")
+        axes[1].legend(fontsize=6, loc="upper right")
         fig_ck.tight_layout()
         ckpt_path = out_dir / f"{stem}_n100_checkpoint.pdf"
         fig_ck.savefig(ckpt_path, dpi=150, bbox_inches="tight")
