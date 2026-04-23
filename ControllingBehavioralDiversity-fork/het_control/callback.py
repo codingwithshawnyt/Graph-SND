@@ -6,6 +6,7 @@ import csv
 import logging
 import math
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -248,6 +249,14 @@ class GraphSNDLoggingCallback(Callback):
         "scaling_ratio_mean",
         "applied_snd",
         "out_loc_norm_mean",
+        # End-to-end per-iter wall-clock measured between
+        # on_batch_collected and on_train_end (ms). Captures rollout
+        # collection + PPO epochs + Graph-SND estimator cost in a single
+        # number, which is the apples-to-apples cost the head-to-head
+        # full-SND vs Graph-SND comparison needs. NaN on the very first
+        # iter (no prior timestamp) and on any iter where the callback
+        # did not see on_batch_collected (shouldn't happen in practice).
+        "iter_time_ms",
     ]
 
     def __init__(
@@ -270,6 +279,7 @@ class GraphSNDLoggingCallback(Callback):
         self._current_reward_mean: float = float("nan")
         self._current_iter: int = 0
         self._last_written_iter: int = -1
+        self._iter_start_perf: Optional[float] = None
 
     # ------------------------------------------------------------------
     # CSV lifecycle
@@ -313,6 +323,12 @@ class GraphSNDLoggingCallback(Callback):
 
     def on_batch_collected(self, batch: TensorDictBase) -> None:
         self._current_iter = int(self.experiment.n_iters_performed)
+        # Start the end-to-end iter timer as soon as we re-enter the
+        # collect phase (i.e. right after the previous iter's PPO updates
+        # finished). We deliberately do not rely on BenchMARL exposing a
+        # dedicated on_iter_start hook because that hook does not exist
+        # in the versions we pin against.
+        self._iter_start_perf = time.perf_counter()
 
         # Reseed each HetControlMlpEmpirical model's Bernoulli RNG so the
         # (seed, iter) pair reproduces the identical sequence of subgraph
@@ -370,6 +386,12 @@ class GraphSNDLoggingCallback(Callback):
         else:
             applied_snd = float("nan")
 
+        if self._iter_start_perf is not None:
+            iter_time_ms = (time.perf_counter() - self._iter_start_perf) * 1000.0
+        else:
+            iter_time_ms = float("nan")
+        self._iter_start_perf = None
+
         row: Dict[str, Any] = {
             "iter": self._current_iter,
             "seed": self.seed,
@@ -383,6 +405,7 @@ class GraphSNDLoggingCallback(Callback):
             "scaling_ratio_mean": scaling_ratio_mean,
             "applied_snd": applied_snd,
             "out_loc_norm_mean": out_loc_norm_mean,
+            "iter_time_ms": iter_time_ms,
         }
         assert self._csv_writer is not None
         self._csv_writer.writerow(row)
