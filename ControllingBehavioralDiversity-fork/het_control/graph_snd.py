@@ -41,38 +41,56 @@ _knn_edges_impl = None
 _random_regular_edges_impl = None
 
 
-def _get_random_regular_edges():
-    """Return ``graphsnd.graphs.random_regular_edges``, bootstrapping repo-root ``sys.path`` if needed."""
-    global _random_regular_edges_impl
-    if _random_regular_edges_impl is not None:
-        return _random_regular_edges_impl
-    try:
-        from graphsnd.graphs import random_regular_edges as _fn
+def _import_graphsnd_symbol(symbol_name: str):
+    """Import ``graphsnd.graphs.<symbol_name>`` robustly when the fork's own
+    working directory shadows the repository-level ``graphsnd`` package.
 
-        _random_regular_edges_impl = _fn
-        return _fn
-    except ModuleNotFoundError:
+    On some deployments (notably riddle), the process starts from
+    ``ControllingBehavioralDiversity-fork``. Python then resolves
+    ``import graphsnd`` against a fork-local package first, which may not
+    expose all symbols (e.g., ``random_regular_edges``). In that case we:
+      1) prepend the repository root to ``sys.path``;
+      2) clear any already-cached ``graphsnd`` modules from ``sys.modules``;
+      3) retry the import from the intended package.
+    """
+    try:
+        mod = __import__("graphsnd.graphs", fromlist=[symbol_name])
+        return getattr(mod, symbol_name)
+    except (ModuleNotFoundError, ImportError, AttributeError):
         repo_root = Path(__file__).resolve().parents[2]
         gs_dir = repo_root / "graphsnd"
         if gs_dir.is_dir() and str(repo_root) not in sys.path:
             sys.path.insert(0, str(repo_root))
             logger.info(
                 "Prepended %s to sys.path so ``import graphsnd`` resolves "
-                "(``pip install -e .`` from that directory avoids this).",
+                "to repository root package.",
                 repo_root,
             )
+        # If a shadowed graphsnd module was already imported from the fork
+        # subtree, drop it so the next import can resolve against repo_root.
+        for key in list(sys.modules.keys()):
+            if key == "graphsnd" or key.startswith("graphsnd."):
+                del sys.modules[key]
         try:
-            from graphsnd.graphs import random_regular_edges as _fn
-        except ModuleNotFoundError as exc:
+            mod = __import__("graphsnd.graphs", fromlist=[symbol_name])
+            return getattr(mod, symbol_name)
+        except (ModuleNotFoundError, ImportError, AttributeError) as exc:
             raise RuntimeError(
-                "Could not import ``graphsnd`` (needed for expander Graph-SND). "
-                "From the Graph-SND repository root (the directory that contains "
-                "``graphsnd/`` and ``ControllingBehavioralDiversity-fork/``), run: "
-                "``pip install -e .``"
+                "Could not import ``graphsnd.graphs.%s``. Ensure you run from "
+                "the Graph-SND repository root (contains both ``graphsnd/`` "
+                "and ``ControllingBehavioralDiversity-fork/``) and install "
+                "the package with ``pip install -e .``."
+                % symbol_name
             ) from exc
 
-        _random_regular_edges_impl = _fn
-        return _fn
+
+def _get_random_regular_edges():
+    """Return ``graphsnd.graphs.random_regular_edges``, bootstrapping repo-root ``sys.path`` if needed."""
+    global _random_regular_edges_impl
+    if _random_regular_edges_impl is not None:
+        return _random_regular_edges_impl
+    _random_regular_edges_impl = _import_graphsnd_symbol("random_regular_edges")
+    return _random_regular_edges_impl
 
 
 def _get_knn_edges():
@@ -80,33 +98,8 @@ def _get_knn_edges():
     global _knn_edges_impl
     if _knn_edges_impl is not None:
         return _knn_edges_impl
-    try:
-        from graphsnd.graphs import knn_edges as _fn
-
-        _knn_edges_impl = _fn
-        return _fn
-    except ModuleNotFoundError:
-        repo_root = Path(__file__).resolve().parents[2]
-        gs_dir = repo_root / "graphsnd"
-        if gs_dir.is_dir() and str(repo_root) not in sys.path:
-            sys.path.insert(0, str(repo_root))
-            logger.info(
-                "Prepended %s to sys.path so ``import graphsnd`` resolves "
-                "(``pip install -e .`` from that directory avoids this).",
-                repo_root,
-            )
-        try:
-            from graphsnd.graphs import knn_edges as _fn
-        except ModuleNotFoundError as exc:
-            raise RuntimeError(
-                "Could not import ``graphsnd`` (needed for k-NN Graph-SND). "
-                "From the Graph-SND repository root (the directory that contains "
-                "``graphsnd/`` and ``ControllingBehavioralDiversity-fork/``), run: "
-                "``pip install -e .``"
-            ) from exc
-
-        _knn_edges_impl = _fn
-        return _fn
+    _knn_edges_impl = _import_graphsnd_symbol("knn_edges")
+    return _knn_edges_impl
 
 
 # Per-policy ``torch.Generator`` for Bernoulli edge draws. These must **not** be
