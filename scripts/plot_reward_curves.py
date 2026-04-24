@@ -49,6 +49,7 @@ LABEL_MAP = {
     "graph_p01": r"Graph-SND $p{=}0.1$",
     "graph_p025": r"Graph-SND $p{=}0.25$",
     "knn": "k-NN Graph-SND",
+    "expander": r"Expander $d{=}\lceil\log n\rceil$",
 }
 
 # Fixed palette so independent plots stay visually consistent across the paper.
@@ -58,6 +59,7 @@ COLOR_MAP = {
     "full": "#2ca02c",
     "graph_p01": "#d62728",
     "graph_p025": "#9467bd",
+    "expander": "#17becf",
 }
 
 
@@ -223,6 +225,7 @@ def _plot_panel(
             "knn":        r"k\text{-}NN",
             "graph_p01":  r"p{=}0.1",
             "graph_p025": r"p{=}0.25",
+            "expander":   r"\mathrm{exp}",
         }
         ratio_lines: list[str] = []
         for key, tex_name in ratio_labels.items():
@@ -380,7 +383,7 @@ def main() -> None:
             handles,
             labels,
             loc="upper center",
-            ncol=min(len(labels), 5),
+            ncol=min(len(labels), 6),
             frameon=False,
             bbox_to_anchor=(0.5, 1.02),
             fontsize=9,

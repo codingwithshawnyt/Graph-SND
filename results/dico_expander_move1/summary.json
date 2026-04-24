@@ -1,0 +1,68 @@
+{
+  "n10": {
+    "n_agents": 10,
+    "late_iterations": 10,
+    "snd_des": 0.1,
+    "variants": {
+      "ippo": {
+        "reward_late_mean": 0.05576166672011216,
+        "reward_late_sem": 0.0018221419430244949
+      },
+      "full": {
+        "reward_late_mean": 0.06409055553376675,
+        "reward_late_sem": 0.0004600417524392013,
+        "applied_late_mean": 0.10098853835817372,
+        "applied_late_sem": 0.0002294494155727319,
+        "tracking_rel_err_pct_mean": 0.9885383581737193,
+        "metric_time_ms_median_of_late": 0.5253964802717365
+      },
+      "knn": {
+        "reward_late_mean": 0.06848333254456519,
+        "reward_late_sem": 0.0017465263748896883,
+        "applied_late_mean": 0.10089624910828704,
+        "applied_late_sem": 0.00018886884434901594,
+        "tracking_rel_err_pct_mean": 0.8962491082870384,
+        "metric_time_ms_median_of_late": 0.36996467054798554
+      },
+      "bern": {
+        "reward_late_mean": 0.06987222209572792,
+        "reward_late_sem": 0.0008156438297431977,
+        "applied_late_mean": 0.10074555677449337,
+        "applied_late_sem": 0.00033576143196237615,
+        "tracking_rel_err_pct_mean": 0.7455567744933574,
+        "metric_time_ms_median_of_late": 0.1453371582815803
+      },
+      "expander": {
+        "reward_late_mean": 0.06445666626095771,
+        "reward_late_sem": 0.004088874352278894,
+        "applied_late_mean": 0.10160004521181432,
+        "applied_late_sem": 0.0009717869398121102,
+        "tracking_rel_err_pct_mean": 1.6000452118143151,
+        "metric_time_ms_median_of_late": 0.32353590670858084
+      }
+    }
+  },
+  "n50_seed0": {
+    "n_agents": 50,
+    "late_iterations": 10,
+    "snd_des": 0.1,
+    "seed": 0,
+    "variants": {
+      "expander": {
+        "reward_late_mean": 0.30242500007152556,
+        "applied_late_mean": 0.10002835943057145,
+        "tracking_rel_err_pct": 0.028359430571445188,
+        "metric_time_ms_median_late": 1.78667105027233
+      },
+      "bern": {
+        "reward_late_mean": 0.29872500598430635,
+        "applied_late_mean": 0.10023046305791283,
+        "tracking_rel_err_pct": 0.2304630579128275,
+        "metric_time_ms_median_late": 2.4374274805908227
+      },
+      "ippo": {
+        "reward_late_mean": 0.3911833316087723
+      }
+    }
+  }
+}

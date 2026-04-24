@@ -120,11 +120,13 @@ $n$ and three hardware/call regimes. In a deterministic fixed-$G$
 expander ablation, random $d$-regular graphs achieve
 $\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ at
 $|E|{=}\Theta(n\log n)$ across $n\in\{50,100,200,500\}$, and this
-ordering persists on a trained $n{=}100$ checkpoint. On VMAS Dispersion at $n{=}10$, substituting either a $k{=}3$ $k$-NN
-graph or a Bernoulli-$0.1$ random subgraph for full SND inside the
-DiCo diversity controller matches the $\SND_{\mathrm{des}}{=}0.1$
-set point to within $10^{-3}$ and matches full-$\SND$ reward within
-seed variance; a paired three-seed, three-set-point head-to-head at
+ordering persists on a trained $n{=}100$ checkpoint. On VMAS Dispersion at $n{=}10$, substituting a $k{=}3$ $k$-NN graph,
+Bernoulli-$0.1$ random subgraph, or random $d$-regular expander
+Graph-SND ($d{=}\lceil\log_2 n\rceil$) for full SND inside the DiCo
+diversity controller matches the $\SND_{\mathrm{des}}{=}0.1$ set
+point to within ${\approx}2\%$ relative error (typically within
+$10^{-3}$ for $k$-NN and Bernoulli-$0.1$) and matches full-$\SND$
+reward within seed variance; a paired three-seed, three-set-point head-to-head at
 $n{=}50$ trains both Bernoulli-$0.1$ Graph-SND and full SND as the
 DiCo estimator and finds statistically indistinguishable reward and
 tracking (sub-$1\%$ relative error for both) at a measured
@@ -209,10 +211,11 @@ matching the structural $1/p$ prediction across
 $n\in\{4,8,16,100,250,500\}$ and three hardware/call regimes (CPU
 frozen-checkpoint, $500$-iter online PPO at $n{=}100$, GPU
 frozen-init), and DiCo closed-loop integration on VMAS Dispersion
-($n{=}10$, three seeds) where both $k$-NN (fixed-$G$) and
-Bernoulli-$0.1$ (random-$G$) Graph-SND substitutions track the
-full-$\SND$ set point and match full-$\SND$ reward within seed
-variance at reduced per-call cost, extended at $n{=}50$ to a
+($n{=}10$, three seeds) where $k$-NN (fixed-$G$), Bernoulli-$0.1$
+(random-$G$), and random $d$-regular expander Graph-SND (with
+$d{=}\Theta(\log n)$) all track the full-$\SND$ set point and match
+full-$\SND$ reward within cross-seed variance at reduced per-call
+cost, extended at $n{=}50$ to a
 three-seed, three-set-point \emph{head-to-head} sweep that trains
 both Bernoulli-$0.1$ Graph-SND and full SND and finds
 statistically indistinguishable training outcomes at a measured
@@ -777,37 +780,48 @@ Independent PPO with the HetControl heterogeneous MLP
 diversity $\SND_{\mathrm{des}}$ using the full $O(n^2)$ aggregator;
 we replace that aggregator with Graph-SND on either a dynamic
 per-environment $k$-nearest-neighbour graph ($k{=}3$ in observation
-space, $128$-env subsample) or a Bernoulli-$0.1$ random subgraph. We
-compare four configurations at matched training budget ($167$
+space, $128$-env subsample), a Bernoulli-$0.1$ random subgraph, or a
+random $d$-regular expander graph with $d{=}3{=}\lceil\log_2
+10\rceil$ (parity-adjusted so $nd$ is even), resampled each
+diversity call on the same RNG schedule as Bernoulli. We compare
+five configurations at matched training budget ($167$
 iterations, ${\approx}10^7$ frames) across three seeds: diversity
 control disabled (\texttt{desired\_snd}${=}{-}1$), DiCo with full
-pairwise $\SND$ on $K_n$, DiCo with $k$-NN Graph-SND, and DiCo with
-Bernoulli-$0.1$ Graph-SND; all controlled runs use
-$\SND_{\mathrm{des}}{=}0.1$.
+pairwise $\SND$ on $K_n$, DiCo with $k$-NN Graph-SND, DiCo with
+Bernoulli-$0.1$ Graph-SND, and DiCo with expander Graph-SND; all
+controlled runs use $\SND_{\mathrm{des}}{=}0.1$.
 
-Figure~\ref{fig:dico-dispersion-knn} summarises the four runs along
+Figure~\ref{fig:dico-dispersion-knn} summarises the five runs along
 three axes (reward, applied-$\SND$ tracking, per-call metric cost).
 Terminal mean reward (last $10$ iterations, three seeds) is
-$0.070\pm0.001$ for Bernoulli-$0.1$, $0.069\pm0.003$ for $k$-NN,
-$0.064\pm0.001$ for full $\SND$, and $0.056\pm0.003$ for the
-diversity-off baseline: both sparse variants match full $\SND$
-within seed variance and all three controlled runs outperform
-unconstrained IPPO. All controlled variants hold the \emph{applied}
-$\SND$ (post-scaling, \citep{bettini2024dico}) at
-$0.1010\pm0.0004$ (full), $0.1009\pm0.0003$ ($k$-NN), and
-$0.1007\pm0.0005$ (Bernoulli-$0.1$), indistinguishable from the
-$\SND_{\mathrm{des}}{=}0.1$ set point to within $10^{-3}$. Median
-per-call metric cost is $0.53\,\text{ms}$ (full), $0.24\,\text{ms}$
-($k$-NN), $0.15\,\text{ms}$ (Bernoulli-$0.1$)---median speedups of
-$2.16\times$ ($k$-NN) and $3.63\times$ (Bernoulli-$0.1$), matching
-the pair-count ratios $\binom{n}{2}:nk/2:0.1\binom{n}{2}$ implied by
-Proposition~\ref{prop:complexity} at $n{=}10$. Sparse Graph-SND is
-therefore jointly (i) a faithful drop-in at the DiCo metric API,
-(ii) at no cost to downstream reward, and (iii) at reduced per-call
-metric cost even at modest $n$. Fixed-$G$ ($k$-NN) and random-$G$
-(Bernoulli-$0.1$) provide complementary operating points in the
-same controller ($k$-NN preserves structured locality;
-Bernoulli-$0.1$ minimises metric cost). Absolute per-call times here
+$0.070\pm0.001$ for Bernoulli-$0.1$, $0.068\pm0.003$ for $k$-NN,
+$0.064\pm0.001$ for full $\SND$, $0.064\pm0.007$ for expander
+Graph-SND, and $0.056\pm0.003$ for the diversity-off baseline: all
+four controlled variants match one another within cross-seed
+variance and outperform unconstrained IPPO. All controlled variants
+hold the \emph{applied} $\SND$ (post-scaling,
+\citep{bettini2024dico}) at $0.1010\pm0.0004$ (full),
+$0.1009\pm0.0002$ ($k$-NN), $0.1007\pm0.0003$ (Bernoulli-$0.1$), and
+$0.1016\pm0.002$ (expander), i.e.\ within $2\%$ relative error of
+$\SND_{\mathrm{des}}{=}0.1$ in every case (expander is slightly
+noisier seed-to-seed because each iteration draws a fresh
+$d$-regular graph). Median per-call metric cost is
+$0.53\,\text{ms}$ (full), $0.24\,\text{ms}$ ($k$-NN),
+$0.32\,\text{ms}$ (expander), and $0.15\,\text{ms}$
+(Bernoulli-$0.1$)---median speedups of $2.16\times$ ($k$-NN),
+$1.63\times$ (expander), and $3.63\times$ (Bernoulli-$0.1$) over full
+$\SND$, matching the expected pair-count ordering at
+$n{=}10$ (expander uses $|E|{=}nd/2{=}15$ edges vs.\ $45$ pairs).
+Graph-SND is therefore jointly (i) a faithful drop-in at the DiCo
+metric API under multiple choices of~$G$, (ii) at no systematic
+reward penalty relative to full $\SND$ at this sample size, and
+(iii) at reduced per-call metric cost whenever $|E|\ll\binom{n}{2}$.
+Fixed-$G$ ($k$-NN), random edge sampling (Bernoulli-$0.1$), and
+random $d$-regular expanders provide complementary operating points
+($k$-NN preserves structured locality; Bernoulli-$0.1$ minimises
+metric cost; expanders realise the deterministic near-linear
+$|E|{=}\Theta(n\log n)$ regime from Section~\ref{sec:experiments:expander}
+inside the live controller). Absolute per-call times here
 are GPU-measured inside the DiCo training loop at the minibatched
 rollout shape and so have a different magnitude than the
 frozen-checkpoint CPU timings of Section~\ref{sec:experiments:timing}
@@ -826,6 +840,16 @@ cost, matching the $\binom{n}{2}/\mathbb{E}[|E|]{=}10$ prediction
 of Proposition~\ref{prop:complexity};
 Appendix~\ref{app:dico-n50-sweep} reports the $18$-run head-to-head
 in full.
+Separately, a single-seed feasibility run at $n{=}50$ with the same
+hyperparameters as the Bernoulli/full head-to-head
+(Appendix~\ref{app:dico-n50-sweep}) pairs unconstrained IPPO against
+DiCo with expander Graph-SND ($d{=}4$, $|E|{=}100$) at
+$\SND_{\mathrm{des}}{=}0.1$; on the last $10$ iterations the
+expander arm tracks the set point to $0.03\%$ relative error with
+median per-call metric time ${\approx}1.8\,\text{ms}$, confirming that
+the expander estimator remains usable at the same team scale as the
+Bernoulli/full comparison (full numerical summary in
+\texttt{results/dico\_expander\_move1/summary.json}).
 
 \begin{figure}[t]
 \centering
@@ -837,24 +861,25 @@ in full.
 pairwise $\SND$ on $K_n$. \textbf{Orange:} DiCo with $k$-NN Graph-SND
 ($k{=}3$, $128$ environments subsampled for the $k$-NN construction).
 \textbf{Red:} DiCo with Bernoulli-$0.1$ Graph-SND
-(\texttt{diversity\_estimator=graph\_p01}).
+(\texttt{diversity\_estimator=graph\_p01}). \textbf{Cyan:} DiCo with
+expander Graph-SND ($d{=}3$, $|E|{=}15$, resampled each diversity
+call).
 Lines are mean over seeds; bands are mean~$\pm$~std for reward
 (Panel~1) and applied SND (Panel~2), and median with IQR for per-call
 metric cost (Panel~3)---timing data is right-skewed, so median/IQR is
-robust to sparse CUDA-sync tail events. Panel~1: all three DiCo
-variants outperform the diversity-off baseline; both sparse Graph-SND
-variants are within seed variance of full $\SND$. Panel~2: all
-controlled runs track $\SND_{\mathrm{des}}{=}0.1$ to within $10^{-3}$.
-Panel~3: median per-call cost is lowest for Bernoulli-$0.1$, then
-$k$-NN, then full $\SND$, matching the expected pair-count ordering;
-the annotation reports both median speedups over full $\SND$. Both
-sparse variants exhibit sparse IQR widening from CUDA-sync tail
-events: the $k$-NN band reflects occasional graph-construction
-spikes on the $128$-env subsample, while the Bernoulli-$0.1$ band
-reflects per-call sampling-mask variance. In both cases the
-worst-case per-call cost remains bounded by the full-$\SND$ cost
-plus a constant overhead (graph construction for $k$-NN,
-mask+$1/p$ reweighting for Bernoulli-$0.1$).}
+robust to sparse CUDA-sync tail events. Panel~1: all four DiCo
+variants outperform the diversity-off baseline; reward curves for
+full $\SND$, expander, and Bernoulli-$0.1$ overlap within cross-seed
+variance. Panel~2: all controlled runs track
+$\SND_{\mathrm{des}}{=}0.1$ to within $2\%$ relative error (expander
+shows slightly wider seed-to-seed band because the underlying graph
+resamples every call). Panel~3: median per-call cost orders as
+Bernoulli-$0.1$ $<$ $k$-NN $<$ expander $<$ full $\SND$, matching the
+pair-count ordering at $n{=}10$; the annotation reports median
+speedups over full $\SND$ for the three sparse estimators. Sparse
+estimators exhibit IQR widening from CUDA-sync tail events and, for
+$k$-NN, occasional graph-construction spikes on the $128$-env
+subsample.}
 \label{fig:dico-dispersion-knn}
 \end{figure}
 
@@ -869,6 +894,11 @@ $|E|{=}\Theta(n\log n)$ edges---a $\Theta(n/\log n)$-factor reduction
 against full $\SND$.
 We now validate both the empirical distortion and the mechanism
 ($\pi(G)$ scaling) behind the bound.
+The same random $d$-regular expander family is also exercised
+\emph{inside} the DiCo training loop as the diversity aggregator
+(Section~\ref{sec:experiments:dico-dispersion}), closing the loop
+between the frozen-policy distortion panels below and a live
+controller at matched~$n$.
 
 \paragraph{Setup.}
 For each $n\in\{50,100,200,500\}$ we construct four graph families at
