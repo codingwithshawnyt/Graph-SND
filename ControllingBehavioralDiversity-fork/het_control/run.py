@@ -85,7 +85,7 @@ def get_experiment(cfg: DictConfig) -> Experiment:
                 seed=int(cfg.seed),
                 n_agents=n_agents,
                 estimator=str(cfg.model.diversity_estimator),
-                p=float(cfg.model.diversity_p),
+                p=float("nan") if str(cfg.model.diversity_estimator) == "expander" else float(cfg.model.diversity_p),
             )
         )
 

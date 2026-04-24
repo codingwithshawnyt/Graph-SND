@@ -37,6 +37,43 @@ logger = logging.getLogger(__name__)
 # prepend the root to ``sys.path`` once so ``import graphsnd`` works anyway.
 _knn_edges_impl = None
 
+# Lazily resolved ``random_regular_edges`` from the sibling ``graphsnd`` package.
+_random_regular_edges_impl = None
+
+
+def _get_random_regular_edges():
+    """Return ``graphsnd.graphs.random_regular_edges``, bootstrapping repo-root ``sys.path`` if needed."""
+    global _random_regular_edges_impl
+    if _random_regular_edges_impl is not None:
+        return _random_regular_edges_impl
+    try:
+        from graphsnd.graphs import random_regular_edges as _fn
+
+        _random_regular_edges_impl = _fn
+        return _fn
+    except ModuleNotFoundError:
+        repo_root = Path(__file__).resolve().parents[2]
+        gs_dir = repo_root / "graphsnd"
+        if gs_dir.is_dir() and str(repo_root) not in sys.path:
+            sys.path.insert(0, str(repo_root))
+            logger.info(
+                "Prepended %s to sys.path so ``import graphsnd`` resolves "
+                "(``pip install -e .`` from that directory avoids this).",
+                repo_root,
+            )
+        try:
+            from graphsnd.graphs import random_regular_edges as _fn
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "Could not import ``graphsnd`` (needed for expander Graph-SND). "
+                "From the Graph-SND repository root (the directory that contains "
+                "``graphsnd/`` and ``ControllingBehavioralDiversity-fork/``), run: "
+                "``pip install -e .``"
+            ) from exc
+
+        _random_regular_edges_impl = _fn
+        return _fn
+
 
 def _get_knn_edges():
     """Return ``graphsnd.graphs.knn_edges``, bootstrapping repo-root ``sys.path`` if needed."""
@@ -118,7 +155,7 @@ def reseed_graph_rng(owner: object, seed: int) -> None:
     get_graph_rng(owner).manual_seed(int(seed))
 
 
-VALID_ESTIMATORS = ("full", "graph_p01", "graph_p025", "knn")
+VALID_ESTIMATORS = ("full", "graph_p01", "graph_p025", "knn", "expander")
 
 
 _CURRENT_ITER_TIMES_MS: List[float] = []
@@ -499,6 +536,7 @@ def compute_diversity(
     knn_positions: Optional[torch.Tensor] = None,
     knn_subsample_envs: Optional[int] = 128,
     knn_use_vectorized: bool = True,
+    expander_d: int = 3,
 ) -> torch.Tensor:
     """Dispatch to the full-SND path or a Graph-SND path based on ``estimator``.
 
@@ -571,6 +609,23 @@ def compute_diversity(
             subsample_rng=rng,
             use_vectorized=knn_use_vectorized,
         )
+
+    if estimator == "expander":
+        random_regular_edges = _get_random_regular_edges()
+        n = len(agent_actions)
+        d = expander_d
+        if (n * d) % 2 != 0:
+            logger.debug(
+                "n*d=%d is odd; using d=%d instead of %d for expander graph.",
+                n * d, d - 1, d,
+            )
+            d = d - 1
+        if rng is None:
+            rng = torch.Generator()
+        rng_seed = int(torch.randint(0, 2**31 - 1, (1,), generator=rng).item())
+        edges_tensor = random_regular_edges(n, d, rng_seed)
+        edges = [(int(e[0]), int(e[1])) for e in edges_tensor.tolist()]
+        return compute_graph_snd_uniform(agent_actions, edges, just_mean=just_mean)
 
     if estimator not in VALID_ESTIMATORS:
         raise ValueError(

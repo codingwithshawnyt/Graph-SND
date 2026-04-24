@@ -36,6 +36,7 @@ class HetControlMlpEmpirical(Model):
         diversity_p: float = 1.0,
         diversity_knn_k: int = 3,
         diversity_knn_subsample_envs: int = 128,
+        diversity_expander_d: int = 3,
         **kwargs,
     ):
         """DiCo policy model
@@ -86,6 +87,7 @@ class HetControlMlpEmpirical(Model):
         # O(B) per-env k-NN loop; only safe for tiny B, e.g. evaluation/tests).
         _sub = int(diversity_knn_subsample_envs)
         self.diversity_knn_subsample_envs = _sub if _sub > 0 else None
+        self.diversity_expander_d = int(diversity_expander_d)
         # Bernoulli RNG lives in ``het_control.graph_snd.get_graph_rng(self)`` (weak-key
         # registry), not on this module, so TorchRL can ``deepcopy`` the actor for
         # PPO loss. GraphSNDLoggingCallback reseeds via ``reseed_graph_rng`` each iter.
@@ -408,6 +410,7 @@ class HetControlMlpEmpirical(Model):
             knn_k=self.diversity_knn_k,
             knn_positions=knn_positions,
             knn_subsample_envs=self.diversity_knn_subsample_envs,
+            expander_d=self.diversity_expander_d,
         ) # Compute the SND of these unscaled policies (scalar tensor)
         distance = distance_scalar.unsqueeze(-1)
         if self.estimated_snd.isnan().any():  # First iteration
@@ -437,6 +440,7 @@ class HetControlMlpEmpiricalConfig(ModelConfig):
     diversity_p: float = 1.0
     diversity_knn_k: int = 3
     diversity_knn_subsample_envs: int = 128
+    diversity_expander_d: int = 3
 
     @staticmethod
     def associated_class():

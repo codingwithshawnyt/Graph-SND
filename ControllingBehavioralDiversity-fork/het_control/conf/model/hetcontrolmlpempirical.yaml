@@ -60,3 +60,8 @@ diversity_knn_k: 3
 # and 675 calls/iter, which hangs training. Override on the CLI with
 # ``model.diversity_knn_subsample_envs=<int>``; set to 0 to disable the cap.
 diversity_knn_subsample_envs: 128
+# Degree for the random d-regular expander graph. Only used when
+# diversity_estimator == expander. Recommended: d = ceil(log(n_agents)).
+# n_agents * d must be even; if odd, the dispatch auto-falls back to d-1.
+# n=10 -> d=3 (10*3=30, even). n=50 -> d=4 (50*4=200, even).
+diversity_expander_d: 3
