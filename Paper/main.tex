@@ -120,12 +120,16 @@ $n$ and three hardware/call regimes. In a deterministic fixed-$G$
 expander ablation, random $d$-regular graphs achieve
 $\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ at
 $|E|{=}\Theta(n\log n)$ across $n\in\{50,100,200,500\}$, and this
-ordering persists on a trained $n{=}100$ checkpoint. On VMAS Dispersion ($n{=}10$,
-three seeds), substituting either a $k{=}3$ $k$-NN graph or a
-Bernoulli-$0.1$ random subgraph for full SND inside the DiCo
-diversity controller matches the $\SND_{\mathrm{des}}{=}0.1$ set point
-to within $10^{-3}$ and matches full-$\SND$ reward within seed
-variance, with Bernoulli-$0.1$ the cheapest in per-call metric time.
+ordering persists on a trained $n{=}100$ checkpoint. On VMAS Dispersion at $n{=}10$, substituting either a $k{=}3$ $k$-NN
+graph or a Bernoulli-$0.1$ random subgraph for full SND inside the
+DiCo diversity controller matches the $\SND_{\mathrm{des}}{=}0.1$
+set point to within $10^{-3}$ and matches full-$\SND$ reward within
+seed variance; a paired three-seed, three-set-point head-to-head at
+$n{=}50$ trains both Bernoulli-$0.1$ Graph-SND and full SND as the
+DiCo estimator and finds statistically indistinguishable reward and
+tracking (sub-$1\%$ relative error for both) at a measured
+${\sim}9.5{\times}$ cheaper per-call metric cost for
+Bernoulli-$0.1$.
 \end{abstract}
 % ============================================================
 \section{Introduction}
@@ -208,8 +212,12 @@ frozen-init), and DiCo closed-loop integration on VMAS Dispersion
 ($n{=}10$, three seeds) where both $k$-NN (fixed-$G$) and
 Bernoulli-$0.1$ (random-$G$) Graph-SND substitutions track the
 full-$\SND$ set point and match full-$\SND$ reward within seed
-variance at reduced per-call cost, plus a deterministic expander
-ablation showing near-unit relative error
+variance at reduced per-call cost, extended at $n{=}50$ to a
+three-seed, three-set-point \emph{head-to-head} sweep that trains
+both Bernoulli-$0.1$ Graph-SND and full SND and finds
+statistically indistinguishable training outcomes at a measured
+${\sim}9.5{\times}$ cheaper metric call, plus a deterministic
+expander ablation showing near-unit relative error
 ($\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$) at
 $|E|{=}\Theta(n\log n)$ across $n\in\{50,100,200,500\}$, including a
 trained $n{=}100$ checkpoint panel.
@@ -582,8 +590,13 @@ PPO scaling run at $n=100$, and finally a closed-loop integration of
 Graph-SND into the DiCo diversity controller \citep{bettini2024dico}
 on VMAS Dispersion (Section~\ref{sec:experiments:dico-dispersion}).
 Measurement is demonstrated to $n{=}500$ (frozen-policy timing and
-expander ablation), while training is demonstrated to $n{=}100$ for
-online PPO and to $n{=}50$ for DiCo set-point control
+expander ablation); training is demonstrated to $n{=}100$ for
+online PPO and to $n{=}50$ for DiCo set-point control, where a
+head-to-head Bernoulli-$0.1$ vs full-SND sweep over three seeds and
+three set points shows statistically indistinguishable training
+quality (sub-$1\%$ relative tracking error for both estimators,
+reward within $1$ SEM per cell) at a measured ${\sim}9.5{\times}$
+lower per-call metric cost for Bernoulli-$0.1$
 (Appendix~\ref{app:dico-n50-sweep}).
 
 \subsection{Setup}
@@ -802,11 +815,17 @@ and the in-training GPU timings of
 Section~\ref{sec:experiments:scaling}; the invariant across all three
 regimes is the $\binom{n}{2}/|E|$ ratio of
 Proposition~\ref{prop:complexity}.
-The same Bernoulli-$0.1$ substitution extends to $n{=}50$ and three
-distinct set points $\SND_{\mathrm{des}}\in\{0.12,0.14,0.15\}$ (three
-seeds each), tracking each target to within $0.5\%$ relative error
-while preserving the monotonic reward--diversity ordering; see
-Appendix~\ref{app:dico-n50-sweep}.
+A head-to-head at $n{=}50$ confirms this directly: training the same
+$3$-seed $\times\,3$-set-point grid twice---once with
+Bernoulli-$0.1$ Graph-SND, once with full SND---yields
+statistically indistinguishable reward and applied-$\SND$ tracking
+in every cell ($0.42$--$0.53\%$ relative tracking error vs
+$0.31$--$0.37\%$ for full SND; per-cell reward means overlap within
+one SEM) at a measured $9.25$--$9.63\times$ lower per-call metric
+cost, matching the $\binom{n}{2}/\mathbb{E}[|E|]{=}10$ prediction
+of Proposition~\ref{prop:complexity};
+Appendix~\ref{app:dico-n50-sweep} reports the $18$-run head-to-head
+in full.
 
 \begin{figure}[t]
 \centering
@@ -1004,10 +1023,12 @@ hardware/call regimes, but we rely on the $\binom{n}{2}/|E|$
 IPPO agents is out of scope.
 \emph{(2) Scenario and DiCo-configuration coverage:} non-DiCo
 experiments use only Multi-Agent Goal Navigation
-\citep{bettini2025snd}; the main DiCo integration uses Dispersion at
-a single $\SND_{\mathrm{des}}{=}0.1$ over three seeds, with a
-supplementary three-seed, three-set-point sweep at $n{=}50$ in
-Appendix~\ref{app:dico-n50-sweep}.
+\citep{bettini2025snd}; the main DiCo integration uses Dispersion
+at a single $\SND_{\mathrm{des}}{=}0.1$ over three seeds, with a
+three-seed, three-set-point head-to-head at $n{=}50$ comparing
+Bernoulli-$0.1$ Graph-SND against full SND as the DiCo estimator
+(Appendix~\ref{app:dico-n50-sweep}); coverage beyond Dispersion
+and other DiCo configurations remains out of scope here.
 \emph{(3) Fixed-$G$ distribution dependence:}
 Theorem~\ref{thm:distortion} bounds worst-case distortion for arbitrary
 fixed $G$, and the expander ablation of
@@ -1532,92 +1553,124 @@ speedups reported here.}
 \end{figure}
 
 % ------------------------------------------------------------------
-% Appendix: DiCo + Bernoulli-0.1 set-point sweep at n=50 (3 seeds x 3
-% desired_snd values).  Results files live at
+% Appendix: DiCo head-to-head at n=50 -- Bernoulli-0.1 Graph-SND vs
+% full SND over the same 3 seeds x 3 desired_snd grid. Inputs:
 %   ControllingBehavioralDiversity-fork/results/neurips_final_n50_setpoint_sweep/
-% and the summary figure/table at
-%   results/dico_n50_sweep/{n50_setpoint_sweep.pdf, n50_setpoint_sweep_summary.csv}.
-\section{DiCo + Bernoulli-$0.1$ set-point sweep at $n{=}50$}
+%     seed{0,1,2}/snd{0p12,0p14,0p15}/{bern,full}/graph_snd_log.csv
+% Regenerate the figure and the tabular fragment with
+%   python experiments/n50_bern_vs_full_comparison.py
+\section{DiCo head-to-head at $n{=}50$: Bernoulli-$0.1$ Graph-SND vs full SND}
 \label{app:dico-n50-sweep}
 
 We extend the closed-loop experiment of
-Section~\ref{sec:experiments:dico-dispersion} along two axes: team
-size (from $n{=}10$ to $n{=}50$, ${\approx}5\times$ more agents) and
-the diversity set point itself (from the single
-$\SND_{\mathrm{des}}{=}0.1$ used in the main text to three values
-$\SND_{\mathrm{des}}\in\{0.12,0.14,0.15\}$). Each
-(seed, set point) cell is one independent $167$-iteration IPPO run
-(${\approx}10^7$ frames) with Bernoulli-$0.1$ Graph-SND as the sole
-diversity estimator fed to DiCo; hyperparameters match
+Section~\ref{sec:experiments:dico-dispersion} along three axes: team
+size (from $n{=}10$ to $n{=}50$, ${\approx}5\times$ more agents), the
+diversity set point (from the single $\SND_{\mathrm{des}}{=}0.1$ used
+in the main text to three values
+$\SND_{\mathrm{des}}\in\{0.12,0.14,0.15\}$), and \emph{the choice of
+estimator itself}: at every $(\mathrm{seed},\SND_{\mathrm{des}})$
+cell we run the same $167$-iteration IPPO training twice, once with
+Bernoulli-$0.1$ Graph-SND and once with the full SND estimator
+(i.e.\ the unmodified DiCo codepath on $K_n$), yielding an
+$18$-run ($2{\times}3{\times}3$) head-to-head at matched seeds and
+matched hyperparameters. Hyperparameters match
 Section~\ref{sec:experiments:dico-dispersion} apart from
 $\texttt{on\_policy\_n\_envs\_per\_worker}{=}120$ and
 $\texttt{on\_policy\_collected\_frames\_per\_batch}{=}12{,}000$
 (reduced from $600$ and $60{,}000$ to keep the per-iteration rollout
 within a single RTX~4090's memory budget at $5{\times}$ more
-per-agent tensors). The expected edge count fed to the controller is
-$\mathbb{E}[|E(G_{0.1})|]{=}0.1\binom{50}{2}{=}122.5$ out of
-$\binom{50}{2}{=}1{,}225$ pairs ($10\%$ edge density).
+per-agent tensors); the two estimators see bit-identical rollouts
+and differ only in the diversity aggregation on each PPO forward.
+The expected edge count fed to the controller under the Bernoulli
+variant is $\mathbb{E}[|E(G_{0.1})|]{=}0.1\binom{50}{2}{=}122.5$
+against $\binom{50}{2}{=}1{,}225$ under full SND ($10\%$ edge
+density), a nominal $10\times$ reduction in per-call metric work.
 
-Figure~\ref{fig:dico-n50-sweep}(a) shows the per-iteration applied
-$\SND$ (post-scaling, the quantity DiCo regulates) for every
-(seed, set point) cell: after a ${\sim}25$-iteration transient each
-run settles onto its horizontal target line and stays there for the
-remaining ${\sim}140$ iterations of training. Panel~(b) shows episode
-reward on the same runs: higher set points yield monotonically higher
-terminal reward, consistent with Dispersion rewarding role
-specialisation among a large team. Table~\ref{tab:dico-n50-sweep}
-aggregates the late-window ($50$-iteration tail) statistics across
-seeds. The controller tracks each set point to within
-$0.42$--$0.53\%$ relative error (i.e.\ within $8\times 10^{-4}$ in
-absolute $\SND$), with cross-seed standard error on the applied
-$\SND$ of at most $1.2\times 10^{-4}$. Median per-call metric time is
-${\approx}2.05\,\text{ms}$ across all cells, regardless of set
-point---consistent with the $\binom{n}{2}/|E|$ cost invariant of
-Proposition~\ref{prop:complexity}. The result extends the
-closed-loop conclusion of Section~\ref{sec:experiments:dico-dispersion}
-along both scale and set-point axes: at $n{=}50$, with a
-random-graph estimator that queries only $10\%$ of pairs per
-iteration, DiCo regulates diversity to multiple distinct targets with
-sub-percent tracking error on a real multi-agent RL task.
+Figure~\ref{fig:dico-n50-bern-vs-full} summarises the nine paired
+runs along four axes. Panel~(a) overlays the per-iteration applied
+$\SND{=}\SND_t\,s_t$ trajectories for the two estimators at each set
+point; after a ${\sim}25$-iteration transient every cell settles
+onto its target line and both estimators produce visually
+overlapping bands for the remaining ${\sim}140$ iterations of
+training. Panel~(b) shows the corresponding per-iteration episode
+reward: the two estimators produce statistically indistinguishable
+reward curves across all three set points, with higher set points
+yielding monotonically higher terminal reward (consistent with
+Dispersion rewarding role specialisation among a large team).
+Panel~(c) quantifies steady-state tracking: the late-window
+($50$-iteration tail) relative error
+$|\mathrm{applied}\,\SND - \SND_{\mathrm{des}}|/\SND_{\mathrm{des}}$
+is $0.42$--$0.53\%$ for Bernoulli-$0.1$ and $0.31$--$0.37\%$ for
+full SND, with full SND slightly tighter than Bernoulli-$0.1$ in
+every cell---expected, as full SND is the ground truth and
+Bernoulli-$0.1$ queries only ${\sim}10\%$ of pairs. Both estimators
+remain well under the $1\%$ floor of the controller. Panel~(d)
+isolates per-call metric cost: Bernoulli-$0.1$ averages
+${\sim}2.0\,\mathrm{ms}$/call, full SND averages
+${\sim}18.9\,\mathrm{ms}$/call, a $9.25$--$9.63\times$ ratio that
+tracks the analytical $\binom{n}{2}/\mathbb{E}[|E|]{=}10$ prediction
+of Proposition~\ref{prop:complexity} nearly exactly. Because full
+SND iters take $52.4\,\mathrm{s}$ end-to-end at this $n$ and batch
+size---dominated by rollout collection and PPO updates rather than
+by the metric---the absolute wall-clock savings at $n{=}50$ are a
+few percent of training time; the same ${\sim}10{\times}$
+metric-call speedup translates into larger end-to-end savings as the
+metric's share of per-iteration time grows with $n$ (see the
+Section~\ref{sec:experiments:timing} timing sweep).
+
+Table~\ref{tab:dico-n50-bern-vs-full} reports the numerical summary
+aggregated across three seeds per cell. Applied $\SND$ is within
+$0.6\%$ of the target for both estimators at all three set points;
+cross-seed standard error on applied $\SND$ is at most
+$1.2\times 10^{-4}$ (Bernoulli-$0.1$) and $1.0\times 10^{-4}$
+(full). Per-cell reward means overlap within one SEM in every cell,
+so the two estimators produce statistically indistinguishable
+training outcomes at the sample sizes used here. The head-to-head
+thus upgrades the closed-loop conclusion of
+Section~\ref{sec:experiments:dico-dispersion} from ``matches full
+$\SND$ at $n{=}10$'' to ``matches full $\SND$ at $n{=}50$ over three
+distinct set points, with full SND actually trained to convergence
+on each cell'', and does so at the $9{-}10\times$ lower per-call
+metric cost predicted by the cost invariant. In other words, at
+$n{=}50$ the central substitution claim is demonstrated directly
+rather than extrapolated: DiCo with Bernoulli-$0.1$ Graph-SND is a
+drop-in replacement for DiCo with full SND.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.95\linewidth]{figures/dico_n50_setpoint_sweep.pdf}
-\caption{DiCo $+$ Bernoulli-$0.1$ Graph-SND at $n{=}50$ across three
-set points (three seeds each). \textbf{(a)}~Applied
-$\SND{=}\SND_t\,s_t$ per iteration; dotted lines mark
-$\SND_{\mathrm{des}}\in\{0.12,0.14,0.15\}$. Curves are mean across
-seeds; bands are $\pm 1$ std. All three runs converge to their
-target within ${\sim}25$ iterations and stay on target for the
-remaining ${\sim}140$ iterations of training. \textbf{(b)}~Mean
-episode reward on the same runs, same colour coding. Higher set
-points yield monotonically higher terminal reward.}
-\label{fig:dico-n50-sweep}
+\includegraphics[width=\linewidth]{figures/dico_n50_bern_vs_full.pdf}
+\caption{DiCo head-to-head at $n{=}50$, $3{\times}3$ grid of seeds
+and set points, each cell trained twice with matched rollouts (one
+Bernoulli-$0.1$ Graph-SND, one full SND), $18$ runs total.
+\textbf{(a)}~Applied $\SND{=}\SND_t\,s_t$ per iteration; colour
+encodes $\SND_{\mathrm{des}}\in\{0.12,0.14,0.15\}$, solid lines are
+Bernoulli-$0.1$, dashed lines are full SND; bands are $\pm 1$ std
+across seeds. \textbf{(b)}~Mean episode reward on the same runs,
+same colour/line encoding. \textbf{(c)}~Late-window ($50$-iter tail)
+relative tracking error; full SND is slightly tighter than
+Bernoulli-$0.1$ but both remain well under $1\%$.
+\textbf{(d)}~Median per-call metric wall-clock; full SND median
+iter-time of $52.4\,\mathrm{s}$ is annotated to contextualise the
+${\sim}9.5\times$ metric speed-up (which is ${\lesssim}2\%$ of
+per-iter time at $n{=}50$ but grows with $n$).}
+\label{fig:dico-n50-bern-vs-full}
 \end{figure}
 
 \begin{table}[ht]
 \centering
-\caption{N=50 DiCo $+$ Bernoulli-$0.1$ Graph-SND set-point sweep.
-Aggregated across three seeds on the late window (last $50$
-iterations). ``Applied $\SND$'' and ``reward'' are reported as
-mean $\pm$ cross-seed standard error (SEM); ``rel.\ track.\ err.''
-is the mean absolute tracking error divided by
-$\SND_{\mathrm{des}}$; ``metric time'' is the across-cell mean of
-per-run median per-call times. All runs use the same
-Bernoulli-$0.1$ estimator with expected edge count $122.5$ out of
-$1{,}225$ pairs.}
-\label{tab:dico-n50-sweep}
+\caption{DiCo at $n{=}50$ head-to-head, aggregated across three
+seeds on the late window (last $50$ iterations). ``Applied $\SND$''
+and ``reward'' are mean $\pm$ cross-seed standard error (SEM);
+``rel.\ track.\ err.'' is mean absolute tracking error divided by
+$\SND_{\mathrm{des}}$; ``metric time'' is the cross-cell median of
+per-run median per-call times for the named estimator.
+Bernoulli-$0.1$ has expected edge count $122.5$ out of
+$\binom{50}{2}{=}1{,}225$; full SND evaluates all $1{,}225$ pairs.}
+\label{tab:dico-n50-bern-vs-full}
 \small
-\begin{tabular}{cccccc}
-\toprule
-$\SND_{\mathrm{des}}$ & Applied $\SND$ & Rel.\ track.\ err.\ (\%) & Reward & Scaling $s_t$ & Metric time (ms) \\
-\midrule
-$0.12$ & $0.1203 \pm 1.2\!\times\!10^{-4}$ & $0.53$ & $0.295 \pm 0.016$ & $0.0159$ & $2.13$ \\
-$0.14$ & $0.1404 \pm 0.7\!\times\!10^{-4}$ & $0.48$ & $0.338 \pm 0.008$ & $0.0184$ & $2.00$ \\
-$0.15$ & $0.1503 \pm 0.1\!\times\!10^{-4}$ & $0.42$ & $0.350 \pm 0.005$ & $0.0183$ & $2.05$ \\
-\bottomrule
-\end{tabular}
+\resizebox{\linewidth}{!}{\input{n50_bern_vs_full_headtohead}}
 \end{table}
+
 
 \section{Expander ablation: supplementary panels}
 \label{app:expander-extra}

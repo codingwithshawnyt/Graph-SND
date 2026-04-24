@@ -278,25 +278,24 @@ def plot(df: pd.DataFrame, per_cell: pd.DataFrame, out_path: Path) -> None:
     ax.grid(True, axis="y", alpha=0.2)
     ax.legend(fontsize=8)
 
-    # (d) Cost comparison. Prefer iter_time_ms (end-to-end) when available on
-    # both estimators; fall back to metric_time_ms (per-call average) when
-    # only one estimator has end-to-end timing (older Bernoulli CSVs).
+    # (d) Cost comparison. Always plot median metric_time_ms (per-call mean
+    # wall-clock of the Graph-SND / full-SND estimator itself -- the only
+    # component that causally differs between the two at fixed batch size
+    # and fixed model). When the full-SND cells also logged end-to-end
+    # iter_time_ms (added to the callback after the original Bernoulli
+    # runs), annotate the bar with iter-time in seconds so readers can see
+    # the metric's share of total per-iter wall-clock at n=50.
     ax = axes[1, 1]
-    ax.set_title("(d) Per-call / per-iter wall-clock")
-    both_have_iter = (
-        per_cell.loc[per_cell["estimator"] == "bern", "iter_time_ms_median"].notna().any()
-        and per_cell.loc[per_cell["estimator"] == "full", "iter_time_ms_median"].notna().any()
-    )
-    metric_col = "iter_time_ms_median" if both_have_iter else "metric_time_ms_median"
-    metric_label = (
-        "iter_time_ms (end-to-end)"
-        if both_have_iter
-        else "metric_time_ms (per-call mean, only component that differs)"
-    )
+    ax.set_title("(d) Metric-call wall-clock (ms)")
     for i, (est, sty) in enumerate(ESTIMATOR_STYLE.items()):
         per_est = per_cell[per_cell["estimator"] == est]
-        vals = per_est.groupby("snd_des")[metric_col].median().reindex(setpoints).values
-        ax.bar(
+        vals = (
+            per_est.groupby("snd_des")["metric_time_ms_median"]
+            .median()
+            .reindex(setpoints)
+            .values
+        )
+        bars = ax.bar(
             x + (i - 0.5) * width,
             vals,
             width,
@@ -304,12 +303,51 @@ def plot(df: pd.DataFrame, per_cell: pd.DataFrame, out_path: Path) -> None:
             color=sty["color"],
             alpha=0.8,
         )
+        for b, v in zip(bars, vals):
+            if np.isfinite(v):
+                ax.annotate(
+                    f"{v:.1f}",
+                    xy=(b.get_x() + b.get_width() / 2, v),
+                    xytext=(0, 2),
+                    textcoords="offset points",
+                    ha="center",
+                    fontsize=7,
+                )
     ax.set_xticks(x)
     ax.set_xticklabels([f"{d:.2f}" for d in setpoints])
     ax.set_xlabel(r"$\mathrm{SND}_{\mathrm{des}}$")
-    ax.set_ylabel(f"ms ({metric_label})")
+    ax.set_ylabel("median metric_time_ms (per call)")
     ax.grid(True, axis="y", alpha=0.2)
-    ax.legend(fontsize=8)
+    # Leave ~18% headroom above the tallest bar so the value annotations
+    # and the iter-time box aren't eclipsed by the legend.
+    _ymax = float(max(v for v in vals if np.isfinite(v)))
+    ax.set_ylim(0, _ymax * 1.18)
+    ax.legend(fontsize=8, loc="center right")
+
+    # Annotate full-SND iter wall-clock at the top of panel (d) so the
+    # reader can contextualise the ~10x metric speed-up against the
+    # rollout+PPO-dominated per-iter budget at n=50.
+    iter_ms_full = per_cell.loc[
+        per_cell["estimator"] == "full", "iter_time_ms_median"
+    ].median()
+    if np.isfinite(iter_ms_full):
+        ax.text(
+            0.5,
+            0.97,
+            f"full-SND median iter: {iter_ms_full/1000:.1f} s  "
+            f"(metric share $\\lesssim$2\\%)",
+            transform=ax.transAxes,
+            ha="center",
+            va="top",
+            fontsize=8,
+            color="#333",
+            bbox=dict(
+                boxstyle="round,pad=0.25",
+                facecolor="white",
+                edgecolor="#bbb",
+                alpha=0.9,
+            ),
+        )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=200, bbox_inches="tight")
@@ -335,15 +373,23 @@ def emit_latex(agg: pd.DataFrame, out_path: Path) -> None:
     )
     lines.append(
         r"$\mathrm{SND}_{\mathrm{des}}$ & Bern-0.1 & Full & Bern-0.1 & Full"
-        r" & Bern-0.1 & Full & Bern-0.1 & Full \\"
+        r" & Bern-0.1 (\%) & Full (\%) & Bern-0.1 & Full \\"
     )
     lines.append(r"\midrule")
 
-    def _fmt_pm(mean: float, sem: float, digits: int = 3) -> str:
+    def _fmt_pm_scaled(mean: float, sem: float, digits: int) -> str:
+        """Format ``mean ± SEM`` with enough digits that the SEM isn't
+        rounded to zero when it's several orders of magnitude smaller than
+        the mean (as is the case for applied-SND, where SEM ~ 1e-4)."""
         if not np.isfinite(mean):
             return "--"
-        if not np.isfinite(sem):
+        if not np.isfinite(sem) or sem == 0.0:
             return f"{mean:.{digits}f}"
+        # Show at least 1 significant digit of SEM; bump digits if the
+        # default would round the SEM to zero.
+        if sem > 0:
+            min_sem_digits = max(0, int(np.ceil(-np.log10(sem))) + 1)
+            digits = max(digits, min_sem_digits)
         return f"{mean:.{digits}f}$\\pm${sem:.{digits}f}"
 
     def _fmt_ms(v: float) -> str:
@@ -365,12 +411,12 @@ def emit_latex(agg: pd.DataFrame, out_path: Path) -> None:
         rf = row_full.iloc[0]
         lines.append(
             f"{des:.2f} "
-            f"& {_fmt_pm(rb['applied_mean'], rb['applied_sem'])} "
-            f"& {_fmt_pm(rf['applied_mean'], rf['applied_sem'])} "
-            f"& {_fmt_pm(rb['reward_mean'], rb['reward_sem'])} "
-            f"& {_fmt_pm(rf['reward_mean'], rf['reward_sem'])} "
-            f"& {rb['tracking_err_rel']:.3f} "
-            f"& {rf['tracking_err_rel']:.3f} "
+            f"& {_fmt_pm_scaled(rb['applied_mean'], rb['applied_sem'], digits=3)} "
+            f"& {_fmt_pm_scaled(rf['applied_mean'], rf['applied_sem'], digits=3)} "
+            f"& {_fmt_pm_scaled(rb['reward_mean'], rb['reward_sem'], digits=3)} "
+            f"& {_fmt_pm_scaled(rf['reward_mean'], rf['reward_sem'], digits=3)} "
+            f"& {rb['tracking_err_rel']*100:.2f} "
+            f"& {rf['tracking_err_rel']*100:.2f} "
             f"& {_fmt_ms(rb['metric_time_ms'])} "
             f"& {_fmt_ms(rf['metric_time_ms'])} \\\\"
         )
