@@ -992,7 +992,10 @@ baseline panel, all three sparse variants show near-zero violation rates
 and similarly small absolute bias. This does not claim SOTA MPE
 performance; it is a regime-transfer check that Graph-SND's
 distance-agnostic graph aggregation behaves as expected beyond the
-Gaussian/VMAS setting.
+Gaussian/VMAS setting. The higher trained-policy violation rate reflects
+larger absolute $\SND$ scale on specialised policies under a
+fixed-threshold metric, not estimator degradation, as evidenced by the
+small max bias.
 
 \begin{figure}[t]
   \centering
@@ -1574,8 +1577,14 @@ random-init & Expander-$d2$ & 0.0000 & $0.274{\times}10^{-3}$ & 0.143 & $2.13\ti
 \caption{PettingZoo MPE simple-spread transfer panel ($n{=}10$,
 categorical policies, TVD distance, three seeds, $2{,}000$ draws/seed).
 `Mean viol.' is the fraction of draws with
-$|\SNDG^{\mathrm{u}}-\SND|>0.05$ averaged across seeds; `Speedup' is
-relative to full SND wall-clock in the same regime.}
+$|\SNDG^{\mathrm{u}}-\SND|>0.05$ averaged across seeds---a
+fixed-threshold diagnostic, not the Hoeffding violation rate (which
+requires the population-dependent bound from
+Theorem~\ref{thm:concentration}). Because TVD lies in $[0,1]$, the
+$0.05$ threshold is loose relative to typical Hoeffding radii at
+$\delta{=}0.1$; the small max $|\mathrm{bias}|$ column is the more
+informative estimator-quality metric. `Speedup' is relative to full SND
+wall-clock in the same regime.}
 \label{tab:mpe-tvd-panel}
 \end{table}
 
