@@ -120,7 +120,12 @@ $n$ and three hardware/call regimes. In a deterministic fixed-$G$
 expander ablation, random $d$-regular graphs achieve
 $\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ at
 $|E|{=}\Theta(n\log n)$ across $n\in\{50,100,200,500\}$, and this
-ordering persists on a trained $n{=}100$ checkpoint. On VMAS Dispersion at $n{=}10$, substituting a $k{=}3$ $k$-NN graph,
+ordering persists on a trained $n{=}100$ checkpoint. On PettingZoo MPE
+simple-spread at $n{=}10$ (discrete actions, categorical policies, TVD
+distance), a three-seed panel shows that sparse Graph-SND estimators
+track full SND with max absolute bias $2.92{\times}10^{-3}$ while
+reducing wall-clock metric cost by $1.97$--$4.87\times$ depending on edge
+budget. On VMAS Dispersion at $n{=}10$, substituting a $k{=}3$ $k$-NN graph,
 Bernoulli-$0.1$ random subgraph, or random $d$-regular expander
 Graph-SND ($d{=}\lceil\log_2 n\rceil$) for full SND inside the DiCo
 diversity controller matches the $\SND_{\mathrm{des}}{=}0.1$ set
@@ -223,7 +228,10 @@ ${\sim}9.5{\times}$ cheaper metric call, plus a deterministic
 expander ablation showing near-unit relative error
 ($\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$) at
 $|E|{=}\Theta(n\log n)$ across $n\in\{50,100,200,500\}$, including a
-trained $n{=}100$ checkpoint panel.
+trained $n{=}100$ checkpoint panel. We additionally validate transfer to
+a non-VMAS, non-Gaussian regime via PettingZoo MPE simple-spread at
+$n{=}10$ with categorical policies and TVD distance, where sparse
+Graph-SND remains close to full SND while reducing per-call metric cost.
 The construction is deliberately narrow: we do not propose a new
 training algorithm, policy architecture, or diversity-inducing
 objective; we propose a drop-in replacement for SND aggregation that is
@@ -968,18 +976,23 @@ graphs the distortion is $\mathcal{O}(1)$ at
 $|E|{=}\Theta(n\log n)$, delivering a deterministic near-linear-cost
 approximation of an $\mathcal{O}(n^2)$ metric}.
 
-\paragraph{Discrete-action instantiation (categorical + TVD).}
-To surface the distance-agnostic claim in the main experimental
-story, we also run a synthetic discrete-action sanity check with
-categorical policies and total-variation distance (TVD) as $d(i,j)$
-(full protocol and table in Appendix~\ref{app:verify},
-Table~\ref{tab:discrete-tvd-sanity}). Across $2{,}000$ Bernoulli draws
-per $p\in\{0.1,0.3,0.5\}$, empirical bias remains near zero
-($|\mathrm{bias}|\le 7.48\times 10^{-4}$) and the Hoeffding violation
-rate at $\delta{=}0.1$ is zero in all cells. This is not a new RL
-benchmark claim; it is a direct sanity check that the same
-unbiasedness/concentration guarantees transfer to a non-Gaussian
-distance without changing the graph-aggregation layer.
+\paragraph{Discrete-action transfer on PettingZoo MPE (categorical + TVD).}
+To address environment and policy-family scope directly, we run a
+non-VMAS panel on PettingZoo MPE simple-spread at $n{=}10$ with
+discrete actions, categorical policies, and total-variation distance
+(TVD) as $d(i,j)$ (Appendix~\ref{app:verify},
+Table~\ref{tab:mpe-tvd-panel}). We train IPPO policies for three seeds,
+then evaluate full SND and sparse Graph-SND variants over $2{,}000$
+graph draws per seed. Across trained policies, sparse estimators remain
+close to full SND (max absolute bias
+$2.92{\times}10^{-3}$), with mean per-call wall-clock reduction of
+$1.97\times$ (expander-$d2$), $2.86\times$ (Bernoulli-$0.25$), and
+$4.87\times$ (Bernoulli-$0.1$) versus full SND. On a random-init
+baseline panel, all three sparse variants show near-zero violation rates
+and similarly small absolute bias. This does not claim SOTA MPE
+performance; it is a regime-transfer check that Graph-SND's
+distance-agnostic graph aggregation behaves as expected beyond the
+Gaussian/VMAS setting.
 
 \begin{figure}[t]
   \centering
@@ -1008,7 +1021,7 @@ $K_n$ and scales linearly in $|E|$. Because the graph layer only sees
 pairwise dissimilarities $d(i,j)$, the same construction is a generic
 sparsification template for pairwise-aggregate diversity metrics beyond
 the Gaussian-$\Wass$ SND instantiation (Appendix~\ref{app:verify},
-Table~\ref{tab:discrete-tvd-sanity}). The two interpretations of
+Table~\ref{tab:mpe-tvd-panel}). The two interpretations of
 $\SNDG$ correspond to two commitments: a fixed $G$ is a
 \emph{modeling} commitment (only certain agent pairs matter, per
 Remark~\ref{rem:semantics}), while a random $G$ with
@@ -1065,10 +1078,11 @@ fixed $G$, and the expander ablation of
 Section~\ref{sec:experiments:expander} confirms the mechanism
 empirically; however, distribution-dependent sharpenings of the
 worst-case $\mathcal{O}(\log n)$ bound remain untested.
-\emph{(4) Closed-form Wasserstein assumption:} every computational
-result uses the Gaussian closed form of \citet{bettini2025snd};
-the theorems hold for any bounded $d(i,j)\in[0,D_{\max}]$, but we
-do not verify on a non-Gaussian family.
+\emph{(4) Non-Gaussian scope is still narrow:} we now include one
+non-Gaussian, non-VMAS transfer panel (PettingZoo MPE simple-spread,
+categorical policies, TVD distance, $n{=}10$), but broader
+non-Gaussian coverage (more tasks, larger $n$, and additional
+dissimilarities beyond TVD) remains untested.
 \emph{(5) IPPO-only algorithm scope:} every RL result uses
 Independent PPO; extending to centralised-critic and other
 policy-gradient algorithms covered by DiCo is a straightforward but
@@ -1077,7 +1091,8 @@ untested extension.
 \paragraph{Future work.}
 Beyond closing these limits, four directions are natural:
 (i) \emph{learned or task-adaptive $G$}; (ii) \emph{non-Gaussian
-policies} by substituting a closed-form or approximate $d$;
+policies at larger scales and tasks} by substituting a closed-form or
+approximate $d$ beyond the $n{=}10$ MPE/TVD panel;
 (iii) \emph{distribution-dependent tightenings} of
 Theorem~\ref{thm:distortion}; and (iv) a broader DiCo$+\SNDG$ study, over larger $n$, tasks,
 set-points, and the interaction of sampling noise in
@@ -1091,8 +1106,10 @@ graph $G$: a localised diversity measure for fixed $G$, and an
 unbiased Horvitz--Thompson sampling estimator of $\SND$ for random
 $G$. Seven formal results and experiments across
 $n\in\{4,8,16,100,250,500\}$ on VMAS Goal Navigation (measurement to
-$n{=}500$) plus online training at $n{=}100$ and DiCo control on
-Dispersion (main: $n{=}10$, supplementary: $n{=}50$) confirm that
+$n{=}500$), plus a non-VMAS transfer panel on MPE simple-spread at
+$n{=}10$ (categorical policies, TVD distance), online training at
+$n{=}100$, and DiCo control on Dispersion (main: $n{=}10$,
+supplementary: $n{=}50$) confirm that
 $\SNDG$ is a drop-in replacement for $\SND$: recovery is numerically
 exact, concentration is respected on every cell, wall-clock cost tracks
 $\binom{n}{2}/|E|$ across a
@@ -1520,39 +1537,46 @@ $[0, D_{\max}]$; the true $d(i,j)$ variance is much smaller.}
 \label{fig:concentration}
 \end{figure}
 
-\paragraph{Distance-agnostic discrete sanity check (categorical + TVD).}
-To verify the distance-agnostic claim beyond the Gaussian-$\Wass$
-instantiation, we run a small synthetic discrete-action check with
-$n{=}10$ agents and $k{=}5$ actions. Each agent policy is sampled from a
-Dirichlet$(\alpha{=}1)$ categorical distribution, pairwise dissimilarity
-is total variation distance (TVD), and $\widehat{\SND}(G_p)$ is computed
-over $2{,}000$ Bernoulli-$p$ graph draws for
-$p\in\{0.1,0.3,0.5\}$ (Table~\ref{tab:discrete-tvd-sanity}). The
-empirical bias is near zero in all cells and the Hoeffding violation
-rate at $\delta{=}0.1$ is zero in all cells, matching the bounded-$d$
-theory of Proposition~\ref{prop:unbiased} and
-Theorem~\ref{thm:concentration}. This check is generated by
-\texttt{experiments/discrete\_tvd\_sanity.py} and is intended as a
-sanity validation of the estimator guarantees under a non-Gaussian
-dissimilarity, not as a new RL benchmark claim.
+\paragraph{Non-VMAS discrete-action transfer (MPE simple-spread + TVD).}
+To verify transfer beyond the Gaussian/VMAS regime, we run a PettingZoo
+MPE simple-spread panel at $n{=}10$ with discrete actions, categorical
+policies, and TVD distance. We train three IPPO seeds with
+\texttt{experiments/mpe\_ippo\_training.py}
+($500$ iterations, $20$ rollouts/iteration), then run
+\texttt{experiments/mpe\_measurement\_panel.py} with $2{,}000$ draws per
+seed for three sparse graphs (Bernoulli-$0.1$, Bernoulli-$0.25$,
+expander-$d2$) and full SND. We report means across seeds, plus the max
+absolute bias over the three seeds. Table~\ref{tab:mpe-tvd-panel} shows
+that sparse estimators remain close to full SND (max
+$|\mathrm{bias}|=2.92\times10^{-3}$) while reducing metric wall-clock
+cost by $1.97$--$4.87\times$. A random-init baseline panel (same seeds,
+same draw budget, no checkpoint load) shows near-zero violation rates
+and similarly small bias. This is a transfer/robustness check for the
+graph aggregation layer, not a claim of task-level MPE training
+superiority.
 
 \begin{table}[t]
 \centering
 \small
-\begin{tabular}{ccccccc}
+\begin{tabular}{llcccc}
 \toprule
-$p$ & mean $|E|$ & $\SND$ & $\E[\widehat{\SND}]$ & bias & std & viol. rate \\
+\textbf{Regime} & \textbf{Estimator} & \textbf{Mean viol.} & \textbf{Max $|\mathrm{bias}|$} & \textbf{Mean ms} & \textbf{Speedup} \\
 \midrule
-0.1 & 4.59 & 0.44990 & 0.44976 & $-1.43{\times}10^{-4}$ & 0.07737 & 0.000 \\
-0.3 & 13.47 & 0.42005 & 0.42080 & $+7.48{\times}10^{-4}$ & 0.04226 & 0.000 \\
-0.5 & 22.32 & 0.48500 & 0.48440 & $-6.02{\times}10^{-4}$ & 0.02451 & 0.000 \\
+trained & Bernoulli-$0.1$ & 0.6252 & $2.917{\times}10^{-3}$ & 0.063 & $4.87\times$ \\
+trained & Bernoulli-$0.25$ & 0.3757 & $1.306{\times}10^{-3}$ & 0.107 & $2.86\times$ \\
+trained & Expander-$d2$ & 0.2302 & $0.703{\times}10^{-3}$ & 0.158 & $1.97\times$ \\
+\midrule
+random-init & Bernoulli-$0.1$ & 0.0043 & $0.326{\times}10^{-3}$ & 0.063 & $4.86\times$ \\
+random-init & Bernoulli-$0.25$ & 0.0000 & $0.184{\times}10^{-3}$ & 0.106 & $2.86\times$ \\
+random-init & Expander-$d2$ & 0.0000 & $0.274{\times}10^{-3}$ & 0.143 & $2.13\times$ \\
 \bottomrule
 \end{tabular}
-\caption{Discrete-action sanity check with categorical policies and TVD
-($n{=}10$, $k{=}5$, $2{,}000$ graph draws per $p$). `viol. rate' is the
-fraction of draws violating the Hoeffding radius at $\delta{=}0.1$;
-all cells are zero.}
-\label{tab:discrete-tvd-sanity}
+\caption{PettingZoo MPE simple-spread transfer panel ($n{=}10$,
+categorical policies, TVD distance, three seeds, $2{,}000$ draws/seed).
+`Mean viol.' is the fraction of draws with
+$|\SNDG^{\mathrm{u}}-\SND|>0.05$ averaged across seeds; `Speedup' is
+relative to full SND wall-clock in the same regime.}
+\label{tab:mpe-tvd-panel}
 \end{table}
 
 \paragraph{CPU wall-clock sweep at $n\in\{4, 8, 16\}$.} As a
