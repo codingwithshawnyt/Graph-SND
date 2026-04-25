@@ -79,7 +79,7 @@ run_cell() {
 
     if [[ -s "${OUT_DIR}/graph_snd_log.csv" && "$FORCE" != "1" ]]; then
         echo "[$(date -Is)] n=${N_AGENTS} ${TAG}: CSV exists, skipping (FORCE=1 to overwrite)" >&2
-        echo "SKIP"
+        RUN_CELL_PID="SKIP"
         return 0
     fi
     if [[ "$FORCE" == "1" ]]; then
@@ -116,7 +116,8 @@ run_cell() {
         "hydra.run.dir=${OUT_DIR}" \
         > "${LOG}" 2>&1 &
 
-    echo "$!"  # return PID on stdout only
+    RUN_CELL_PID="$!"
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -202,8 +203,10 @@ echo "============================================================"
 echo
 echo "[$(date -Is)] ===== PHASE 1: n=250 ====="
 
-PID_FULL=$(run_cell 250 "full" 0 "${N250_ITERS}" "${N250_ENV_N}" "full")
-PID_BERN=$(run_cell 250 "graph_p01" 1 "${N250_ITERS}" "${N250_ENV_N}" "bern_p01")
+run_cell 250 "full" 0 "${N250_ITERS}" "${N250_ENV_N}" "full"
+PID_FULL="$RUN_CELL_PID"
+run_cell 250 "graph_p01" 1 "${N250_ITERS}" "${N250_ENV_N}" "bern_p01"
+PID_BERN="$RUN_CELL_PID"
 
 LOG_FULL="${ROOT}/logs/scale_n250_seed${SEED}_full.log"
 LOG_BERN="${ROOT}/logs/scale_n250_seed${SEED}_bern_p01.log"
@@ -229,8 +232,10 @@ else
     echo
     echo "[$(date -Is)] ===== PHASE 2: n=500 (stretch) ====="
 
-    PID_FULL_500=$(run_cell 500 "full" 0 "${N500_ITERS}" "${N500_ENV_N}" "full")
-    PID_BERN_500=$(run_cell 500 "graph_p01" 1 "${N500_ITERS}" "${N500_ENV_N}" "bern_p01")
+    run_cell 500 "full" 0 "${N500_ITERS}" "${N500_ENV_N}" "full"
+    PID_FULL_500="$RUN_CELL_PID"
+    run_cell 500 "graph_p01" 1 "${N500_ITERS}" "${N500_ENV_N}" "bern_p01"
+    PID_BERN_500="$RUN_CELL_PID"
 
     LOG_FULL_500="${ROOT}/logs/scale_n500_seed${SEED}_full.log"
     LOG_BERN_500="${ROOT}/logs/scale_n500_seed${SEED}_bern_p01.log"
