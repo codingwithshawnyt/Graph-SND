@@ -35,6 +35,7 @@
 #   ONP_MINIBATCH_ITERS (default 5)    — lower than config default 45 for scale runs
 #   ONP_MINIBATCH_SIZE  (default 2048) — lower than config default 4096 for scale runs
 #   CUDA_ALLOC_CONF     (default expandable_segments:True)
+#   EVALUATION         (default false)  — disable eval rollouts to avoid OOM at large n
 #   SKIP_N500       (default 0)   — set 1 to skip the n=500 stretch
 #   FORCE           (default 0)
 #   RESULTS_BASE    (default $ROOT/results/scale_training)
@@ -60,6 +61,7 @@ N500_ENV_N="${N500_ENV_N:-6}"
 ONP_MINIBATCH_ITERS="${ONP_MINIBATCH_ITERS:-5}"
 ONP_MINIBATCH_SIZE="${ONP_MINIBATCH_SIZE:-2048}"
 CUDA_ALLOC_CONF="${CUDA_ALLOC_CONF:-expandable_segments:True}"
+EVALUATION="${EVALUATION:-false}"
 SKIP_N500="${SKIP_N500:-0}"
 FORCE="${FORCE:-0}"
 RESULTS_BASE="${RESULTS_BASE:-${ROOT}/results/scale_training}"
@@ -116,6 +118,7 @@ run_cell() {
         "experiment.on_policy_collected_frames_per_batch=${FRAMES_PER_BATCH}" \
         "experiment.on_policy_n_minibatch_iters=${ONP_MINIBATCH_ITERS}" \
         "experiment.on_policy_minibatch_size=${ONP_MINIBATCH_SIZE}" \
+        "experiment.evaluation=${EVALUATION}" \
         "experiment.render=false" \
         "experiment.train_device=cuda:0" \
         "experiment.sampling_device=cuda:0" \
@@ -205,6 +208,7 @@ echo "  Seed: ${SEED}"
 echo "  Phase 1: n=250, ${N250_ITERS} iters, ENV_N=${N250_ENV_N}"
 echo "  Phase 2: n=500, ${N500_ITERS} iters, ENV_N=${N500_ENV_N} (skip=${SKIP_N500})"
 echo "  PPO inner loop: minibatch_iters=${ONP_MINIBATCH_ITERS}, minibatch_size=${ONP_MINIBATCH_SIZE}"
+echo "  Evaluation: ${EVALUATION}"
 echo "  CUDA alloc conf: ${CUDA_ALLOC_CONF}"
 echo "  Results: ${RESULTS_BASE}"
 echo "============================================================"
