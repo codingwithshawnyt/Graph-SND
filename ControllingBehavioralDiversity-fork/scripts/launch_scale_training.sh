@@ -78,7 +78,8 @@ run_cell() {
     local LOG="${ROOT}/logs/scale_n${N_AGENTS}_seed${SEED}_${TAG}.log"
 
     if [[ -s "${OUT_DIR}/graph_snd_log.csv" && "$FORCE" != "1" ]]; then
-        echo "[$(date -Is)] n=${N_AGENTS} ${TAG}: CSV exists, skipping (FORCE=1 to overwrite)"
+        echo "[$(date -Is)] n=${N_AGENTS} ${TAG}: CSV exists, skipping (FORCE=1 to overwrite)" >&2
+        echo "SKIP"
         return 0
     fi
     if [[ "$FORCE" == "1" ]]; then
@@ -93,7 +94,7 @@ run_cell() {
         EXTRA_OVERRIDES=("model.diversity_p=0.1")
     fi
 
-    echo "[$(date -Is)] n=${N_AGENTS} ${TAG} (${ESTIMATOR}): GPU ${GPU}, ${MAX_ITERS} iters, ENV_N=${ENV_N} -> ${OUT_DIR}"
+    echo "[$(date -Is)] n=${N_AGENTS} ${TAG} (${ESTIMATOR}): GPU ${GPU}, ${MAX_ITERS} iters, ENV_N=${ENV_N} -> ${OUT_DIR}" >&2
 
     CUDA_VISIBLE_DEVICES="${GPU}" nohup "${RUNNER[@]}" \
         --config-name dispersion_ippo_knn_config \
@@ -115,7 +116,7 @@ run_cell() {
         "hydra.run.dir=${OUT_DIR}" \
         > "${LOG}" 2>&1 &
 
-    echo $!  # return PID
+    echo "$!"  # return PID on stdout only
 }
 
 # ---------------------------------------------------------------------------
@@ -127,6 +128,19 @@ wait_pair() {
     local LOG0="$3"
     local LOG1="$4"
     local LABEL="$5"
+
+    if [[ "$PID0" == "SKIP" && "$PID1" == "SKIP" ]]; then
+        echo "[$(date -Is)] ${LABEL}: both jobs skipped."
+        return 0
+    fi
+    if [[ "$PID0" == "SKIP" || "$PID1" == "SKIP" ]]; then
+        echo "[$(date -Is)] ${LABEL}: inconsistent skip state (one skipped, one not). Use FORCE=1 or clear outputs." >&2
+        return 1
+    fi
+    if ! [[ "$PID0" =~ ^[0-9]+$ && "$PID1" =~ ^[0-9]+$ ]]; then
+        echo "[$(date -Is)] ${LABEL}: invalid PID(s): PID0='${PID0}' PID1='${PID1}'" >&2
+        return 1
+    fi
 
     echo "[$(date -Is)] ${LABEL}: spawned PID ${PID0} (GPU 0), PID ${PID1} (GPU 1). Health check in 20s..."
     sleep 20
