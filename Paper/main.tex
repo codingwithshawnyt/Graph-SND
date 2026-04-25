@@ -973,8 +973,9 @@ near-unit behavior.
 In summary: \emph{the worst-case $\mathcal{O}(\log n)$ bound is
 structurally correct but conservative in practice; on near-Ramanujan
 graphs the distortion is $\mathcal{O}(1)$ at
-$|E|{=}\Theta(n\log n)$, delivering a deterministic near-linear-cost
-approximation of an $\mathcal{O}(n^2)$ metric}.
+$|E|{=}\Theta(n\log n)$, consistent with the spectral-mixing mechanism
+of Remark~\ref{rem:spectral-sharpening}, delivering a deterministic
+near-linear-cost approximation of an $\mathcal{O}(n^2)$ metric}.
 
 \paragraph{Discrete-action transfer on PettingZoo MPE (categorical + TVD).}
 To address environment and policy-family scope directly, we run a
@@ -1079,8 +1080,11 @@ and other DiCo configurations remains out of scope here.
 Theorem~\ref{thm:distortion} bounds worst-case distortion for arbitrary
 fixed $G$, and the expander ablation of
 Section~\ref{sec:experiments:expander} confirms the mechanism
-empirically; however, distribution-dependent sharpenings of the
-worst-case $\mathcal{O}(\log n)$ bound remain untested.
+empirically; the observed $\mathcal{O}(1)$ distortion is consistent
+with the spectral-mixing argument of Remark~\ref{rem:spectral-sharpening}
+under bounded effective rank of $\mathbf{D}$, but a fully unconditional
+distribution-dependent sharpening of the worst-case $\mathcal{O}(\log n)$
+bound remains open.
 \emph{(4) Non-Gaussian scope is still narrow:} we now include one
 non-Gaussian, non-VMAS transfer panel (PettingZoo MPE simple-spread,
 categorical policies, TVD distance, $n{=}10$), but broader
@@ -1096,8 +1100,9 @@ Beyond closing these limits, four directions are natural:
 (i) \emph{learned or task-adaptive $G$}; (ii) \emph{non-Gaussian
 policies at larger scales and tasks} by substituting a closed-form or
 approximate $d$ beyond the $n{=}10$ MPE/TVD panel;
-(iii) \emph{distribution-dependent tightenings} of
-Theorem~\ref{thm:distortion}; and (iv) a broader DiCo$+\SNDG$ study, over larger $n$, tasks,
+(iii) \emph{unconditional distribution-dependent tightenings} of
+Theorem~\ref{thm:distortion} beyond the conditional spectral bound of
+Remark~\ref{rem:spectral-sharpening}; and (iv) a broader DiCo$+\SNDG$ study, over larger $n$, tasks,
 set-points, and the interaction of sampling noise in
 $\widehat{\SND}(G_p)$ with DiCo's set-point regulation.
 \section{Conclusion}
@@ -1343,6 +1348,30 @@ distance evaluations with worst-case relative distortion
 $\mathcal{O}(\log n)$, a $\Theta(n/\log n)$-factor reduction against
 full $\SND$.
 \end{corollary}
+
+\begin{remark}[Empirical sharpening via spectral mixing]
+\label{rem:spectral-sharpening}
+Section~\ref{sec:experiments:expander} measures
+$\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ on random $d$-regular
+graphs at $d{=}\Theta(\log n)$---three orders of magnitude tighter than
+the worst-case $\mathcal{O}(\log n)$ ratio of
+Corollary~\ref{cor:expander-distortion}. A spectral-mixing analysis
+suggests this tightening should hold whenever the pairwise dissimilarity
+matrix $\mathbf{D}$ has bounded effective rank
+($\|\mathbf{D}\|_* = \mathcal{O}(n\,D_{\max})$, where $\|\cdot\|_*$
+denotes the nuclear norm): writing
+$W = A/|E| - (J-I)/|\Pairs|$ for the weight-deviation operator, the
+operator-norm--nuclear-norm duality gives
+$|\SNDG^{\mathrm{u}} - \SND| \leq \|W\|_{\mathrm{op}}\,\|\mathbf{D}\|_*
+= \mathcal{O}(\lambda_2\,D_{\max}/d)$, which for Ramanujan graphs
+($\lambda_2 \leq 2\sqrt{d{-}1}$) yields
+$\mathcal{O}(D_{\max}/\sqrt{d})$. Pairwise Wasserstein and TVD matrices
+arising from policy distributions are typically of low effective rank,
+consistent with the observed near-unit ratio. Proving this
+distribution-dependent sharpening unconditionally---or replacing the
+rank assumption with an explicit moment or sub-Gaussianity condition on
+$\mathbf{D}$---is an open problem.
+\end{remark}
 
 \paragraph{Proof of Theorem~\ref{thm:distortion}.}
 
