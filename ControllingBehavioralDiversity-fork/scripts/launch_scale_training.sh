@@ -30,8 +30,11 @@
 #   SEED            (default 0)
 #   N250_ITERS      (default 200)
 #   N500_ITERS      (default 100)
-#   N250_ENV_N      (default 24)
-#   N500_ENV_N      (default 10)
+#   N250_ENV_N      (default 12)
+#   N500_ENV_N      (default 6)
+#   ONP_MINIBATCH_ITERS (default 5)    — lower than config default 45 for scale runs
+#   ONP_MINIBATCH_SIZE  (default 2048) — lower than config default 4096 for scale runs
+#   CUDA_ALLOC_CONF     (default expandable_segments:True)
 #   SKIP_N500       (default 0)   — set 1 to skip the n=500 stretch
 #   FORCE           (default 0)
 #   RESULTS_BASE    (default $ROOT/results/scale_training)
@@ -52,8 +55,11 @@ fi
 SEED="${SEED:-0}"
 N250_ITERS="${N250_ITERS:-200}"
 N500_ITERS="${N500_ITERS:-100}"
-N250_ENV_N="${N250_ENV_N:-24}"
-N500_ENV_N="${N500_ENV_N:-10}"
+N250_ENV_N="${N250_ENV_N:-12}"
+N500_ENV_N="${N500_ENV_N:-6}"
+ONP_MINIBATCH_ITERS="${ONP_MINIBATCH_ITERS:-5}"
+ONP_MINIBATCH_SIZE="${ONP_MINIBATCH_SIZE:-2048}"
+CUDA_ALLOC_CONF="${CUDA_ALLOC_CONF:-expandable_segments:True}"
 SKIP_N500="${SKIP_N500:-0}"
 FORCE="${FORCE:-0}"
 RESULTS_BASE="${RESULTS_BASE:-${ROOT}/results/scale_training}"
@@ -96,7 +102,9 @@ run_cell() {
 
     echo "[$(date -Is)] n=${N_AGENTS} ${TAG} (${ESTIMATOR}): GPU ${GPU}, ${MAX_ITERS} iters, ENV_N=${ENV_N} -> ${OUT_DIR}" >&2
 
-    CUDA_VISIBLE_DEVICES="${GPU}" nohup "${RUNNER[@]}" \
+    CUDA_VISIBLE_DEVICES="${GPU}" \
+    PYTORCH_CUDA_ALLOC_CONF="${CUDA_ALLOC_CONF}" \
+    nohup "${RUNNER[@]}" \
         --config-name dispersion_ippo_knn_config \
         "${LOGGERS}" \
         "seed=${SEED}" \
@@ -106,6 +114,8 @@ run_cell() {
         "experiment.max_n_iters=${MAX_ITERS}" \
         "experiment.on_policy_n_envs_per_worker=${ENV_N}" \
         "experiment.on_policy_collected_frames_per_batch=${FRAMES_PER_BATCH}" \
+        "experiment.on_policy_n_minibatch_iters=${ONP_MINIBATCH_ITERS}" \
+        "experiment.on_policy_minibatch_size=${ONP_MINIBATCH_SIZE}" \
         "experiment.render=false" \
         "experiment.train_device=cuda:0" \
         "experiment.sampling_device=cuda:0" \
@@ -194,6 +204,8 @@ echo "[$(date -Is)] SCALE TRAINING: IPPO + passive Graph-SND logging"
 echo "  Seed: ${SEED}"
 echo "  Phase 1: n=250, ${N250_ITERS} iters, ENV_N=${N250_ENV_N}"
 echo "  Phase 2: n=500, ${N500_ITERS} iters, ENV_N=${N500_ENV_N} (skip=${SKIP_N500})"
+echo "  PPO inner loop: minibatch_iters=${ONP_MINIBATCH_ITERS}, minibatch_size=${ONP_MINIBATCH_SIZE}"
+echo "  CUDA alloc conf: ${CUDA_ALLOC_CONF}"
 echo "  Results: ${RESULTS_BASE}"
 echo "============================================================"
 
