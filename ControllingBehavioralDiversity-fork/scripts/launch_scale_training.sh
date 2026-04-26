@@ -37,6 +37,7 @@
 #   CUDA_ALLOC_CONF     (default expandable_segments:True)
 #   EVALUATION         (default false)  — disable eval rollouts to avoid OOM at large n
 #   SKIP_N500       (default 0)   — set 1 to skip the n=500 stretch
+#   ONLY_N500       (default 0)   — set 1 to run only phase 2 (n=500), skip n=250
 #   FORCE           (default 0)
 #   RESULTS_BASE    (default $ROOT/results/scale_training)
 
@@ -63,8 +64,16 @@ ONP_MINIBATCH_SIZE="${ONP_MINIBATCH_SIZE:-2048}"
 CUDA_ALLOC_CONF="${CUDA_ALLOC_CONF:-expandable_segments:True}"
 EVALUATION="${EVALUATION:-false}"
 SKIP_N500="${SKIP_N500:-0}"
+ONLY_N500="${ONLY_N500:-0}"
 FORCE="${FORCE:-0}"
 RESULTS_BASE="${RESULTS_BASE:-${ROOT}/results/scale_training}"
+
+if [[ "$ONLY_N500" == "1" ]]; then
+    SKIP_N250=1
+    SKIP_N500=0
+else
+    SKIP_N250=0
+fi
 LOGGERS='experiment.loggers=[]'
 
 RUNNER=(python het_control/run_scripts/run_dispersion_ippo.py)
@@ -205,6 +214,7 @@ report_csvs() {
 echo "============================================================"
 echo "[$(date -Is)] SCALE TRAINING: IPPO + passive Graph-SND logging"
 echo "  Seed: ${SEED}"
+echo "  Run mode: only_n500=${ONLY_N500} (skip_n250=${SKIP_N250})"
 echo "  Phase 1: n=250, ${N250_ITERS} iters, ENV_N=${N250_ENV_N}"
 echo "  Phase 2: n=500, ${N500_ITERS} iters, ENV_N=${N500_ENV_N} (skip=${SKIP_N500})"
 echo "  PPO inner loop: minibatch_iters=${ONP_MINIBATCH_ITERS}, minibatch_size=${ONP_MINIBATCH_SIZE}"
@@ -216,26 +226,32 @@ echo "============================================================"
 # ===================================================================
 # PHASE 1: n=250
 # ===================================================================
-echo
-echo "[$(date -Is)] ===== PHASE 1: n=250 ====="
-
-run_cell 250 "full" 0 "${N250_ITERS}" "${N250_ENV_N}" "full"
-PID_FULL="$RUN_CELL_PID"
-run_cell 250 "graph_p01" 1 "${N250_ITERS}" "${N250_ENV_N}" "bern_p01"
-PID_BERN="$RUN_CELL_PID"
-
-LOG_FULL="${ROOT}/logs/scale_n250_seed${SEED}_full.log"
-LOG_BERN="${ROOT}/logs/scale_n250_seed${SEED}_bern_p01.log"
-
-wait_pair "$PID_FULL" "$PID_BERN" "$LOG_FULL" "$LOG_BERN" "n=250"
-RC_250=$?
-
-report_csvs 250
-
-if [[ "$RC_250" -ne 0 ]]; then
+RC_250=0
+if [[ "$SKIP_N250" == "1" ]]; then
     echo
-    echo "[$(date -Is)] PHASE 1 (n=250) had failures. Check logs above." >&2
-    echo "[$(date -Is)] Continuing to Phase 2 anyway (stretch goal)..." >&2
+    echo "[$(date -Is)] ===== PHASE 1: n=250 (skipped) ====="
+else
+    echo
+    echo "[$(date -Is)] ===== PHASE 1: n=250 ====="
+
+    run_cell 250 "full" 0 "${N250_ITERS}" "${N250_ENV_N}" "full"
+    PID_FULL="$RUN_CELL_PID"
+    run_cell 250 "graph_p01" 1 "${N250_ITERS}" "${N250_ENV_N}" "bern_p01"
+    PID_BERN="$RUN_CELL_PID"
+
+    LOG_FULL="${ROOT}/logs/scale_n250_seed${SEED}_full.log"
+    LOG_BERN="${ROOT}/logs/scale_n250_seed${SEED}_bern_p01.log"
+
+    wait_pair "$PID_FULL" "$PID_BERN" "$LOG_FULL" "$LOG_BERN" "n=250"
+    RC_250=$?
+
+    report_csvs 250
+
+    if [[ "$RC_250" -ne 0 ]]; then
+        echo
+        echo "[$(date -Is)] PHASE 1 (n=250) had failures. Check logs above." >&2
+        echo "[$(date -Is)] Continuing to Phase 2 anyway (stretch goal)..." >&2
+    fi
 fi
 
 # ===================================================================
@@ -274,12 +290,21 @@ echo "============================================================"
 echo "[$(date -Is)] SCALE TRAINING COMPLETE"
 echo "============================================================"
 echo
-report_csvs 250
+if [[ "$SKIP_N250" != "1" ]]; then
+    report_csvs 250
+fi
 if [[ "$SKIP_N500" != "1" ]]; then
     report_csvs 500
 fi
 echo
 echo "Monitor progress:"
-echo "  tail -f ${ROOT}/logs/scale_n250_seed${SEED}_full.log"
-echo "  tail -f ${ROOT}/logs/scale_n250_seed${SEED}_bern_p01.log"
-echo "  wc -l ${RESULTS_BASE}/n250/seed${SEED}/*/graph_snd_log.csv"
+if [[ "$SKIP_N250" != "1" ]]; then
+    echo "  tail -f ${ROOT}/logs/scale_n250_seed${SEED}_full.log"
+    echo "  tail -f ${ROOT}/logs/scale_n250_seed${SEED}_bern_p01.log"
+    echo "  wc -l ${RESULTS_BASE}/n250/seed${SEED}/*/graph_snd_log.csv"
+fi
+if [[ "$SKIP_N500" != "1" ]]; then
+    echo "  tail -f ${ROOT}/logs/scale_n500_seed${SEED}_full.log"
+    echo "  tail -f ${ROOT}/logs/scale_n500_seed${SEED}_bern_p01.log"
+    echo "  wc -l ${RESULTS_BASE}/n500/seed${SEED}/*/graph_snd_log.csv"
+fi
