@@ -34,6 +34,10 @@
 #   N500_ENV_N      (default 6)
 #   ONP_MINIBATCH_ITERS (default 5)    — lower than config default 45 for scale runs
 #   ONP_MINIBATCH_SIZE  (default 2048) — lower than config default 4096 for scale runs
+#   N500_ONP_MINIBATCH_ITERS (optional) — if set, overrides ONP_MINIBATCH_ITERS for n=500 only
+#   N500_ONP_MINIBATCH_SIZE  (optional) — if set, overrides ONP_MINIBATCH_SIZE for n=500 only
+#   N500_MODEL_CELLS       (optional) — e.g. "[128,128]" overrides model.num_cells for n=500 only
+#   N500_CRITIC_CELLS      (optional) — e.g. "[128,128]" overrides critic_model.num_cells for n=500 only
 #   CUDA_ALLOC_CONF     (default expandable_segments:True)
 #   EVALUATION         (default false)  — disable eval rollouts to avoid OOM at large n
 #   SKIP_N500       (default 0)   — set 1 to skip the n=500 stretch
@@ -61,6 +65,10 @@ N250_ENV_N="${N250_ENV_N:-12}"
 N500_ENV_N="${N500_ENV_N:-6}"
 ONP_MINIBATCH_ITERS="${ONP_MINIBATCH_ITERS:-5}"
 ONP_MINIBATCH_SIZE="${ONP_MINIBATCH_SIZE:-2048}"
+N500_ONP_MINIBATCH_ITERS="${N500_ONP_MINIBATCH_ITERS:-2}"
+N500_ONP_MINIBATCH_SIZE="${N500_ONP_MINIBATCH_SIZE:-512}"
+N500_MODEL_CELLS="${N500_MODEL_CELLS:-}"
+N500_CRITIC_CELLS="${N500_CRITIC_CELLS:-}"
 CUDA_ALLOC_CONF="${CUDA_ALLOC_CONF:-expandable_segments:True}"
 EVALUATION="${EVALUATION:-false}"
 SKIP_N500="${SKIP_N500:-0}"
@@ -91,6 +99,28 @@ run_cell() {
 
     local N_FOOD="${N_AGENTS}"
     local FRAMES_PER_BATCH=$(( ENV_N * 100 ))
+    local MB_ITERS="${ONP_MINIBATCH_ITERS}"
+    local MB_SIZE="${ONP_MINIBATCH_SIZE}"
+    local MODEL_CELLS_OVERRIDE=()
+    local CRITIC_CELLS_OVERRIDE=()
+
+    # n=500 is far more memory-hungry (multi-agent vmap critic). Use safer
+    # defaults unless the caller explicitly pins N500_ONP_* overrides.
+    if [[ "${N_AGENTS}" -eq 500 ]]; then
+        if [[ -n "${N500_ONP_MINIBATCH_ITERS}" ]]; then
+            MB_ITERS="${N500_ONP_MINIBATCH_ITERS}"
+        fi
+        if [[ -n "${N500_ONP_MINIBATCH_SIZE}" ]]; then
+            MB_SIZE="${N500_ONP_MINIBATCH_SIZE}"
+        fi
+        if [[ -n "${N500_MODEL_CELLS}" ]]; then
+            MODEL_CELLS_OVERRIDE=("model.num_cells=${N500_MODEL_CELLS}")
+        fi
+        if [[ -n "${N500_CRITIC_CELLS}" ]]; then
+            CRITIC_CELLS_OVERRIDE=("critic_model.num_cells=${N500_CRITIC_CELLS}")
+        fi
+    fi
+
     local OUT_DIR="${RESULTS_BASE}/n${N_AGENTS}/seed${SEED}/${TAG}"
     local LOG="${ROOT}/logs/scale_n${N_AGENTS}_seed${SEED}_${TAG}.log"
 
@@ -111,7 +141,7 @@ run_cell() {
         EXTRA_OVERRIDES=("model.diversity_p=0.1")
     fi
 
-    echo "[$(date -Is)] n=${N_AGENTS} ${TAG} (${ESTIMATOR}): GPU ${GPU}, ${MAX_ITERS} iters, ENV_N=${ENV_N} -> ${OUT_DIR}" >&2
+    echo "[$(date -Is)] n=${N_AGENTS} ${TAG} (${ESTIMATOR}): GPU ${GPU}, ${MAX_ITERS} iters, ENV_N=${ENV_N}, frames/batch=${FRAMES_PER_BATCH}, ppo_mb(iters=${MB_ITERS},size=${MB_SIZE}) -> ${OUT_DIR}" >&2
 
     CUDA_VISIBLE_DEVICES="${GPU}" \
     PYTORCH_CUDA_ALLOC_CONF="${CUDA_ALLOC_CONF}" \
@@ -125,8 +155,8 @@ run_cell() {
         "experiment.max_n_iters=${MAX_ITERS}" \
         "experiment.on_policy_n_envs_per_worker=${ENV_N}" \
         "experiment.on_policy_collected_frames_per_batch=${FRAMES_PER_BATCH}" \
-        "experiment.on_policy_n_minibatch_iters=${ONP_MINIBATCH_ITERS}" \
-        "experiment.on_policy_minibatch_size=${ONP_MINIBATCH_SIZE}" \
+        "experiment.on_policy_n_minibatch_iters=${MB_ITERS}" \
+        "experiment.on_policy_minibatch_size=${MB_SIZE}" \
         "experiment.evaluation=${EVALUATION}" \
         "experiment.render=false" \
         "experiment.train_device=cuda:0" \
@@ -134,6 +164,8 @@ run_cell() {
         "experiment.buffer_device=cpu" \
         "model.desired_snd=-1" \
         "model.diversity_estimator=${ESTIMATOR}" \
+        "${MODEL_CELLS_OVERRIDE[@]}" \
+        "${CRITIC_CELLS_OVERRIDE[@]}" \
         "${EXTRA_OVERRIDES[@]}" \
         "hydra.run.dir=${OUT_DIR}" \
         > "${LOG}" 2>&1 &
@@ -218,6 +250,13 @@ echo "  Run mode: only_n500=${ONLY_N500} (skip_n250=${SKIP_N250})"
 echo "  Phase 1: n=250, ${N250_ITERS} iters, ENV_N=${N250_ENV_N}"
 echo "  Phase 2: n=500, ${N500_ITERS} iters, ENV_N=${N500_ENV_N} (skip=${SKIP_N500})"
 echo "  PPO inner loop: minibatch_iters=${ONP_MINIBATCH_ITERS}, minibatch_size=${ONP_MINIBATCH_SIZE}"
+echo "  n=500 PPO overrides: minibatch_iters=${N500_ONP_MINIBATCH_ITERS}, minibatch_size=${N500_ONP_MINIBATCH_SIZE} (applied only when n=500)"
+if [[ -n "${N500_MODEL_CELLS}" ]]; then
+    echo "  n=500 model.num_cells override: ${N500_MODEL_CELLS}"
+fi
+if [[ -n "${N500_CRITIC_CELLS}" ]]; then
+    echo "  n=500 critic_model.num_cells override: ${N500_CRITIC_CELLS}"
+fi
 echo "  Evaluation: ${EVALUATION}"
 echo "  CUDA alloc conf: ${CUDA_ALLOC_CONF}"
 echo "  Results: ${RESULTS_BASE}"
