@@ -82,6 +82,9 @@ if [[ "$ONLY_N500" == "1" ]]; then
 else
     SKIP_N250=0
 fi
+export SKIP_N250
+export SKIP_N500
+export ONLY_N500
 LOGGERS='experiment.loggers=[]'
 
 RUNNER=(python het_control/run_scripts/run_dispersion_ippo.py)
@@ -266,6 +269,7 @@ echo "============================================================"
 # PHASE 1: n=250
 # ===================================================================
 RC_250=0
+RC_500=0
 if [[ "$SKIP_N250" == "1" ]]; then
     echo
     echo "[$(date -Is)] ===== PHASE 1: n=250 (skipped) ====="
@@ -347,3 +351,18 @@ if [[ "$SKIP_N500" != "1" ]]; then
     echo "  tail -f ${ROOT}/logs/scale_n500_seed${SEED}_bern_p01.log"
     echo "  wc -l ${RESULTS_BASE}/n500/seed${SEED}/*/graph_snd_log.csv"
 fi
+
+# Exit non-zero if any executed phase failed so wrappers can auto-retry.
+FAIL=0
+if [[ "$SKIP_N250" != "1" && "${RC_250:-0}" -ne 0 ]]; then
+    FAIL=1
+fi
+if [[ "$SKIP_N500" != "1" && "${RC_500:-0}" -ne 0 ]]; then
+    FAIL=1
+fi
+if [[ "${FAIL}" -ne 0 ]]; then
+    echo
+    echo "[$(date -Is)] ERROR: one or more scale-training phases failed (RC_250=${RC_250:-na}, RC_500=${RC_500:-na})." >&2
+    exit 1
+fi
+exit 0

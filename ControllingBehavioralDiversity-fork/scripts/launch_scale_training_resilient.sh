@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Resilient wrapper around scripts/launch_scale_training.sh:
-# - optionally waits for GPU memory headroom
-# - retries on failure with progressively smaller n=500 knobs
+# - by default does NOT wait on GPUs (shared clusters may never satisfy a threshold)
+# - optional preflight wait for GPU memory headroom (WAIT_GPUS=...)
+# - retries on failure with progressively smaller knobs (OOM mitigation)
 #
 # Usage (from fork root):
 #   bash scripts/launch_scale_training_resilient.sh
 #
 # Common:
-#   WAIT_GPUS=0,1 MIN_FREE_MB=20000 bash scripts/launch_scale_training_resilient.sh
-#   MAX_ATTEMPTS=5 bash scripts/launch_scale_training_resilient.sh
+#   MAX_ATTEMPTS=8 bash scripts/launch_scale_training_resilient.sh
+#
+# Optional preflight (can deadlock on busy shared GPUs if thresholds are too high):
+#   WAIT_GPUS=0,1 MIN_FREE_MB=8000 bash scripts/launch_scale_training_resilient.sh
 #
 # All env vars are forwarded to launch_scale_training.sh except the ones this
 # wrapper consumes: WAIT_GPUS, MIN_FREE_MB, POLL_SEC, MAX_ATTEMPTS
@@ -51,7 +54,8 @@ while [[ "${attempt}" -le "${MAX_ATTEMPTS}" ]]; do
   if [[ "${N500_ENV_N+set}" == "set" ]]; then
     export N500_ENV_N=$(( N500_ENV_N > 1 ? N500_ENV_N - 1 : 1 ))
   fi
-  if [[ "${N250_ENV_N+set}" == "set" ]]; then
+  # If we're in ONLY_N500 mode, don't touch n=250 knobs (even if exported elsewhere).
+  if [[ "${ONLY_N500:-0}" != "1" && "${SKIP_N250:-0}" != "1" && "${N250_ENV_N+set}" == "set" ]]; then
     export N250_ENV_N=$(( N250_ENV_N > 1 ? N250_ENV_N - 1 : 1 ))
   fi
 
