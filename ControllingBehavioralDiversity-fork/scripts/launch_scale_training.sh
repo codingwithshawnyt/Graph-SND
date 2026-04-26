@@ -178,6 +178,21 @@ run_cell() {
 }
 
 # ---------------------------------------------------------------------------
+# Helper: child still running? (Zombie counts as *not* running: must be reaped.)
+# `kill -0` alone is NOT enough — zombies still answer to signal 0.
+# ---------------------------------------------------------------------------
+child_is_running() {
+    local p="$1"
+    local s
+    s=$(ps -o stat= -p "$p" 2>/dev/null) || return 1
+    # Leading Z = zombie (exited, waiting for parent wait())
+    if [[ "$s" == *Z* ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# ---------------------------------------------------------------------------
 # Helper: wait for two PIDs with health check
 # ---------------------------------------------------------------------------
 wait_pair() {
@@ -203,19 +218,55 @@ wait_pair() {
     echo "[$(date -Is)] ${LABEL}: spawned PID ${PID0} (GPU 0), PID ${PID1} (GPU 1). Health check in 20s..."
     sleep 20
 
-    if ! kill -0 "$PID0" 2>/dev/null; then
-        echo "[$(date -Is)] ERROR: ${LABEL} GPU 0 (PID ${PID0}) exited immediately. Tail:" >&2
+    if ! child_is_running "$PID0"; then
+        echo "[$(date -Is)] ERROR: ${LABEL} GPU 0 (PID ${PID0}) not running after spawn window. Tail:" >&2
         tail -n 60 "${LOG0}" >&2 || true
     fi
-    if ! kill -0 "$PID1" 2>/dev/null; then
-        echo "[$(date -Is)] ERROR: ${LABEL} GPU 1 (PID ${PID1}) exited immediately. Tail:" >&2
+    if ! child_is_running "$PID1"; then
+        echo "[$(date -Is)] ERROR: ${LABEL} GPU 1 (PID ${PID1}) not running after spawn window. Tail:" >&2
         tail -n 60 "${LOG1}" >&2 || true
     fi
 
     echo "[$(date -Is)] ${LABEL}: waiting for both jobs..."
     local rc0=0 rc1=0
-    wait "$PID0" 2>/dev/null || rc0=$?
-    wait "$PID1" 2>/dev/null || rc1=$?
+    local done0=0 done1=0
+
+    while true; do
+        if [[ "${done0}" -eq 0 ]] && ! child_is_running "$PID0"; then
+            if wait "$PID0" 2>/dev/null; then
+                rc0=0
+            else
+                rc0=$?
+            fi
+            done0=1
+            if [[ "${done1}" -eq 0 ]] && child_is_running "$PID1"; then
+                echo "[$(date -Is)] ${LABEL}: PID ${PID0} finished (rc=${rc0}); terminating sibling PID ${PID1} for fast retry." >&2
+                kill "$PID1" 2>/dev/null || true
+                sleep 2
+                kill -9 "$PID1" 2>/dev/null || true
+            fi
+        fi
+
+        if [[ "${done1}" -eq 0 ]] && ! child_is_running "$PID1"; then
+            if wait "$PID1" 2>/dev/null; then
+                rc1=0
+            else
+                rc1=$?
+            fi
+            done1=1
+            if [[ "${done0}" -eq 0 ]] && child_is_running "$PID0"; then
+                echo "[$(date -Is)] ${LABEL}: PID ${PID1} finished (rc=${rc1}); terminating sibling PID ${PID0} for fast retry." >&2
+                kill "$PID0" 2>/dev/null || true
+                sleep 2
+                kill -9 "$PID0" 2>/dev/null || true
+            fi
+        fi
+
+        if [[ "${done0}" -eq 1 && "${done1}" -eq 1 ]]; then
+            break
+        fi
+        sleep 1
+    done
 
     echo "[$(date -Is)] ${LABEL}: exit codes GPU0=${rc0}, GPU1=${rc1}"
 
