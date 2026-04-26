@@ -209,22 +209,29 @@ class HetControlMlpEmpirical(Model):
 
         shared_out = self.process_shared_out(shared_out)
 
-        if (
-            self.desired_snd > 0
-            and torch.is_grad_enabled()  # we are training
+        desired_snd_value = float(self.desired_snd.item())
+        should_compute_snd = (
+            torch.is_grad_enabled()  # we are training
             and compute_estimate
             and self.n_agents > 1
-        ):
-            # Update \widehat{SND}
+            and (
+                desired_snd_value > 0
+                # Passive scale experiments use desired_snd=-1 to disable DiCo
+                # control, but still need the SND estimate for CSV logging.
+                or (desired_snd_value == -1 and update_estimate)
+            )
+        )
+        if should_compute_snd:
+            # Update \widehat{SND} for DiCo control or passive CSV logging.
             distance = self.estimate_snd(input)
             if update_estimate:
                 self.estimated_snd[:] = distance.detach()
         else:
             distance = self.estimated_snd
-        if self.desired_snd == 0:
+        if desired_snd_value == 0:
             scaling_ratio = 0.0
         elif (
-            self.desired_snd == -1  # Unconstrained networks
+            desired_snd_value == -1  # Unconstrained networks
             or distance.isnan().any()  # It is the first iteration
             or self.n_agents == 1
         ):
