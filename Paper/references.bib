@@ -35,17 +35,6 @@
   url       = {https://openreview.net/forum?id=qQjUgItPq4}
 }
 
-@article{bettini2024benchmarl,
-  author  = {Matteo Bettini and Amanda Prorok and Vincent Moens},
-  title   = {{BenchMARL}: Benchmarking Multi-Agent Reinforcement Learning},
-  journal = {Journal of Machine Learning Research},
-  year    = {2024},
-  volume  = {25},
-  number  = {217},
-  pages   = {1--10},
-  url     = {http://jmlr.org/papers/v25/23-1612.html}
-}
-
 @inproceedings{bettini2022vmas,
   author    = {Matteo Bettini and Ryan Kortvelesy and Jan Blumenkamp and
                Amanda Prorok},
@@ -169,244 +158,24 @@
 }
 
 % ============================================================
-% MARL methods referenced
+% Graphs in MARL
 % ============================================================
-
-@inproceedings{gupta2017cooperative,
-  author    = {Jayesh K. Gupta and Maxim Egorov and Mykel Kochenderfer},
-  title     = {Cooperative Multi-Agent Control Using Deep Reinforcement
-               Learning},
-  booktitle = {International Conference on Autonomous Agents and
-               Multiagent Systems (AAMAS)},
-  year      = {2017},
-  pages     = {66--83},
-  publisher = {Springer}
-}
-
-@inproceedings{rashid2018qmix,
-  author    = {Tabish Rashid and Mikayel Samvelyan and Christian Schroeder
-               and Gregory Farquhar and Jakob Foerster and
-               Shimon Whiteson},
-  title     = {{QMIX}: Monotonic Value Function Factorisation for Deep
-               Multi-Agent Reinforcement Learning},
-  booktitle = {International Conference on Machine Learning (ICML)},
-  year      = {2018},
-  pages     = {4295--4304}
-}
-
-@inproceedings{christianos2021scaling,
-  author    = {Filippos Christianos and Georgios Papoudakis and
-               Muhammad A. Rahman and Stefano V. Albrecht},
-  title     = {Scaling Multi-Agent Reinforcement Learning with Selective
-               Parameter Sharing},
-  booktitle = {International Conference on Machine Learning (ICML)},
-  year      = {2021},
-  pages     = {1989--1998}
-}
-
-% ============================================================
-% Wasserstein / optimal transport foundations
-% ============================================================
-
-@article{vaserstein1969markov,
-  author  = {Leonid N. Vaserstein},
-  title   = {Markov Processes over Denumerable Products of Spaces,
-             Describing Large Systems of Automata},
-  journal = {Problemy Peredachi Informatsii},
-  year    = {1969},
-  volume  = {5},
-  number  = {3},
-  pages   = {64--72}
-}
-
-@inproceedings{arjovsky2017wasserstein,
-  author    = {Martin Arjovsky and Soumith Chintala and L{\'e}on Bottou},
-  title     = {{Wasserstein} Generative Adversarial Networks},
-  booktitle = {International Conference on Machine Learning (ICML)},
-  year      = {2017},
-  pages     = {214--223}
-}
-
-@book{villani2009optimal,
-  author    = {C{\'e}dric Villani},
-  title     = {Optimal Transport: Old and New},
-  publisher = {Springer},
-  year      = {2009}
-}
-
-@article{menger1942statistical,
-  author  = {Karl Menger},
-  title   = {Statistical Metrics},
-  journal = {Proceedings of the National Academy of Sciences},
-  year    = {1942},
-  volume  = {28},
-  number  = {12},
-  pages   = {535--537}
-}
-
-% ============================================================
-% Concentration inequalities and survey sampling
-% ============================================================
-
-@article{hoeffding1963probability,
-  author  = {Wassily Hoeffding},
-  title   = {Probability Inequalities for Sums of Bounded Random
-             Variables},
-  journal = {Journal of the American Statistical Association},
-  year    = {1963},
-  volume  = {58},
-  number  = {301},
-  pages   = {13--30}
-}
-
-@article{horvitz1952generalization,
-  author  = {Daniel G. Horvitz and Donovan J. Thompson},
-  title   = {A Generalization of Sampling Without Replacement from a
-             Finite Universe},
-  journal = {Journal of the American Statistical Association},
-  year    = {1952},
-  volume  = {47},
-  number  = {260},
-  pages   = {663--685}
-}
-
-@book{boucheron2013concentration,
-  author    = {St{\'e}phane Boucheron and G{\'a}bor Lugosi and
-               Pascal Massart},
-  title     = {Concentration Inequalities: A Nonasymptotic Theory of
-               Independence},
-  publisher = {Oxford University Press},
-  year      = {2013}
-}
-
-% ============================================================
-% Resilience / multi-robot context
-% ============================================================
-
-@article{prorok2021beyond,
-  author  = {Amanda Prorok and Matthew Malencia and Luca Carlone and
-             Gaurav S. Sukhatme and Brian M. Sadler and Vijay Kumar},
-  title   = {Beyond Robustness: A Taxonomy of Approaches Towards Resilient
-             Multi-Robot Systems},
-  journal = {arXiv preprint arXiv:2109.12343},
-  year    = {2021}
-}
-
-@article{woolley2015collective,
-  author  = {Anita Williams Woolley and Ishani Aggarwal and Thomas W.
-             Malone},
-  title   = {Collective Intelligence and Group Performance},
-  journal = {Current Directions in Psychological Science},
-  year    = {2015},
-  volume  = {24},
-  number  = {6},
-  pages   = {420--424}
-}
-
-% ============================================================
-% PPO and infrastructure
-% ============================================================
-
-@article{schulman2017proximal,
-  author  = {John Schulman and Filip Wolski and Prafulla Dhariwal and
-             Alec Radford and Oleg Klimov},
-  title   = {Proximal Policy Optimization Algorithms},
-  journal = {arXiv preprint arXiv:1707.06347},
-  year    = {2017}
-}
-
-@inproceedings{liang2018rllib,
-  author    = {Eric Liang and Richard Liaw and Robert Nishihara and
-               Philipp Moritz and Roy Fox and Ken Goldberg and
-               Joseph Gonzalez and Michael Jordan and Ion Stoica},
-  title     = {{RLlib}: Abstractions for Distributed Reinforcement
-               Learning},
-  booktitle = {International Conference on Machine Learning (ICML)},
-  year      = {2018},
-  pages     = {3053--3062}
-  
-}
-
-@article{serfling1974probability,
-  author  = {Robert J. Serfling},
-  title   = {Probability Inequalities for the Sum in Sampling Without
-             Replacement},
-  journal = {The Annals of Statistics},
-  year    = {1974},
-  volume  = {2},
-  number  = {1},
-  pages   = {39--48}
-}
-
-@article{bardenet2015concentration,
-  author  = {R{\'e}mi Bardenet and Odalric-Ambrym Maillard},
-  title   = {Concentration Inequalities for Sampling Without
-             Replacement},
-  journal = {Bernoulli},
-  year    = {2015},
-  volume  = {21},
-  number  = {3},
-  pages   = {1361--1385}
-}
-
-@article{hoeffding1948class,
-  author  = {Wassily Hoeffding},
-  title   = {A Class of Statistics with Asymptotically Normal
-             Distribution},
-  journal = {The Annals of Mathematical Statistics},
-  year    = {1948},
-  volume  = {19},
-  number  = {3},
-  pages   = {293--325}
-}
-
-@article{chung1987forwarding,
-  author  = {Fan R. K. Chung and Edward G. Coffman and Martin I. Reiman
-             and Burton Simons},
-  title   = {The forwarding index of communication networks},
-  journal = {IEEE Transactions on Information Theory},
-  year    = {1987},
-  volume  = {33},
-  number  = {2},
-  pages   = {224--232}
-}
-
-@article{heydemann1989forwarding,
-  author  = {Marie-Claude Heydemann and Jean-Claude Meyer and
-             Dominique Sotteau},
-  title   = {On forwarding indices of networks},
-  journal = {Discrete Applied Mathematics},
-  year    = {1989},
-  volume  = {23},
-  number  = {2},
-  pages   = {103--123}
-}
-
-@article{leighton1999multicommodity,
-  author  = {Tom Leighton and Satish Rao},
-  title   = {Multicommodity max-flow min-cut theorems and their use in
-             designing approximation algorithms},
-  journal = {Journal of the ACM},
-  year    = {1999},
-  volume  = {46},
-  number  = {6},
-  pages   = {787--832}
-}
 
 @inproceedings{blumenkamp2021emergence,
   author    = {Jan Blumenkamp and Amanda Prorok},
   title     = {The Emergence of Adversarial Communication in
                Multi-Agent Reinforcement Learning},
-  booktitle = {Conference on Robot Learning},
+  booktitle = {Conference on Robot Learning (CoRL)},
   year      = {2021},
   pages     = {1394--1414}
 }
 
 @inproceedings{sukhbaatar2016learning,
-  author    = {Sainbayar Sukhbaatar and Rob Fergus and others},
+  author    = {Sainbayar Sukhbaatar and Arthur Szlam and Rob Fergus},
   title     = {Learning Multiagent Communication with Backpropagation},
-  booktitle = {Advances in Neural Information Processing Systems},
-  year      = {2016}
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2016},
+  volume    = {29}
 }
 
 @inproceedings{wang2020roma,
@@ -414,7 +183,7 @@
                Chongjie Zhang},
   title     = {{ROMA}: Multi-Agent Reinforcement Learning with Emergent
                Roles},
-  booktitle = {International Conference on Machine Learning},
+  booktitle = {International Conference on Machine Learning (ICML)},
   year      = {2020},
   pages     = {9876--9886}
 }
@@ -423,14 +192,19 @@
   author    = {Tonghan Wang and Tarun Gupta and Bei Peng and
                Anuj Mahajan and Shimon Whiteson and Chongjie Zhang},
   title     = {{RODE}: Learning Roles to Decompose Multi-Agent Tasks},
-  booktitle = {International Conference on Learning Representations},
+  booktitle = {International Conference on Learning Representations
+               (ICLR)},
   year      = {2021}
 }
+
+% ============================================================
+% Heterogeneity in robotics
+% ============================================================
 
 @inproceedings{twu2014measure,
   author    = {Philip Twu and Yasamin Mostofi and Magnus Egerstedt},
   title     = {A Measure of Heterogeneity in Multi-Agent Systems},
-  booktitle = {American Control Conference},
+  booktitle = {American Control Conference (ACC)},
   year      = {2014},
   pages     = {3972--3977},
   publisher = {IEEE}
@@ -457,6 +231,118 @@
   number  = {1},
   pages   = {24--35}
 }
+
+% ============================================================
+% Concentration inequalities and survey sampling
+% ============================================================
+
+@article{hoeffding1963probability,
+  author  = {Wassily Hoeffding},
+  title   = {Probability Inequalities for Sums of Bounded Random
+             Variables},
+  journal = {Journal of the American Statistical Association},
+  year    = {1963},
+  volume  = {58},
+  number  = {301},
+  pages   = {13--30}
+}
+
+@article{hoeffding1948class,
+  author  = {Wassily Hoeffding},
+  title   = {A Class of Statistics with Asymptotically Normal
+             Distribution},
+  journal = {The Annals of Mathematical Statistics},
+  year    = {1948},
+  volume  = {19},
+  number  = {3},
+  pages   = {293--325}
+}
+
+@article{horvitz1952generalization,
+  author  = {Daniel G. Horvitz and Donovan J. Thompson},
+  title   = {A Generalization of Sampling Without Replacement from a
+             Finite Universe},
+  journal = {Journal of the American Statistical Association},
+  year    = {1952},
+  volume  = {47},
+  number  = {260},
+  pages   = {663--685}
+}
+
+@article{serfling1974probability,
+  author  = {Robert J. Serfling},
+  title   = {Probability Inequalities for the Sum in Sampling Without
+             Replacement},
+  journal = {The Annals of Statistics},
+  year    = {1974},
+  volume  = {2},
+  number  = {1},
+  pages   = {39--48}
+}
+
+@article{bardenet2015concentration,
+  author  = {R{\'e}mi Bardenet and Odalric-Ambrym Maillard},
+  title   = {Concentration Inequalities for Sampling Without
+             Replacement},
+  journal = {Bernoulli},
+  year    = {2015},
+  volume  = {21},
+  number  = {3},
+  pages   = {1361--1385}
+}
+
+% ============================================================
+% Graph theory: forwarding index, expanders, multicommodity flow
+% ============================================================
+
+@article{chung1987forwarding,
+  author  = {Fan R. K. Chung and Edward G. Coffman and Martin I. Reiman
+             and Burton Simons},
+  title   = {The Forwarding Index of Communication Networks},
+  journal = {IEEE Transactions on Information Theory},
+  year    = {1987},
+  volume  = {33},
+  number  = {2},
+  pages   = {224--232}
+}
+
+@article{heydemann1989forwarding,
+  author  = {Marie-Claude Heydemann and Jean-Claude Meyer and
+             Dominique Sotteau},
+  title   = {On Forwarding Indices of Networks},
+  journal = {Discrete Applied Mathematics},
+  year    = {1989},
+  volume  = {23},
+  number  = {2},
+  pages   = {103--123}
+}
+
+@article{leighton1999multicommodity,
+  author  = {Tom Leighton and Satish Rao},
+  title   = {Multicommodity Max-Flow Min-Cut Theorems and Their Use in
+             Designing Approximation Algorithms},
+  journal = {Journal of the ACM},
+  year    = {1999},
+  volume  = {46},
+  number  = {6},
+  pages   = {787--832}
+}
+
+@article{friedman2003proof,
+  author  = {Joel Friedman},
+  title   = {A Proof of {Alon}'s Second Eigenvalue Conjecture and
+             Related Problems},
+  journal = {Memoirs of the American Mathematical Society},
+  year    = {2008},
+  volume  = {195},
+  number  = {910},
+  pages   = {1--100},
+  note    = {Preliminary version in \emph{Proc.\ 35th ACM STOC}, 2003}
+}
+
+% ============================================================
+% POMDP / POMG foundations
+% ============================================================
 
 @article{kaelbling1998planning,
   author  = {Leslie Pack Kaelbling and Michael L. Littman and
