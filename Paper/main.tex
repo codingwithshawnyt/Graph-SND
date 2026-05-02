@@ -7,7 +7,7 @@
 %     \usepackage[preprint]{neurips_2026}
 % For the camera-ready final version (post-acceptance only):
 %     \usepackage[main, final]{neurips_2026}
-\usepackage[preprint]{neurips_2026}
+\usepackage{neurips_2026}
 
 % ---------- Core packages ----------
 \usepackage[utf8]{inputenc}
@@ -55,7 +55,7 @@
 \newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
 \newcommand{\ind}{\mathbf{1}}
 
-% ---------- Anonymisation-aware helpers ----------
+% ---------- Anonymization-aware helpers ----------
 % \codelocation resolves to "Code will be released upon acceptance."
 % in double-blind submission mode, and to the GitHub URL otherwise.
 % Driven by the NeurIPS style file's internal \if@anonymous flag.
@@ -88,44 +88,35 @@ Graph-Based Local Aggregation and Sampling-Based Estimation}
 
 \begin{abstract}
 System Neural Diversity (SND) measures behavioral heterogeneity in
-multi-agent reinforcement learning by averaging pairwise distances over
-all $\binom{n}{2}$ agent pairs, so every measurement scales
-quadratically with team size. We introduce Graph-SND, a
-graph-structured replacement for this complete pairwise average that
-aggregates distances only over the edges of a user-specified graph
-$G$. The complete graph recovers SND exactly. A fixed $G$ yields a
-localized diversity measure at cost $O(|E|)$; a random edge sample
-supports a Horvitz--Thompson unbiased estimator of full SND and a
-normalized sample mean with $O(1/\sqrt{m})$ finite-population
-concentration in the number of sampled edges. For fixed graphs, we
-prove a deterministic distortion bound governed by the edge forwarding
-index, implying $O(\log n)$ worst-case distortion at
-$|E|=\Theta(n\log n)$ for expander graphs.
-Experiments show that, when full SND is the target, the quadratic
-aggregate can be sparsified without changing the measured signal in the
-regimes tested. On a
-500-iteration $n=100$ PPO run, Bernoulli-$0.1$ Graph-SND tracks full SND
-throughout training while reducing metric time by about $10\times$; GPU
-timing up to $n=500$ follows the predicted
+multi-agent reinforcement learning by averaging pairwise distances
+over all $\binom{n}{2}$ agent pairs, making each call quadratic in
+team size. We introduce Graph-SND, which replaces this complete average
+with a weighted average over graph edges. The complete graph recovers
+SND exactly; fixed graphs define localized diversity measures at
+$O(|E|)$ cost; and random edge samples yield either an unconditionally
+unbiased Horvitz--Thompson estimator or a normalized sample mean with
+finite-population $O(1/\sqrt{m})$ concentration conditional on the
+sampled edge count. For fixed sparse graphs, we prove a distortion bound
+controlled by the edge forwarding index, giving $O(\log n)$ worst-case
+distortion for expanders with $\Theta(n\log n)$ edges. Experiments on
+VMAS and PettingZoo verify recovery, unbiasedness, concentration, and
+wall-clock scaling. In a 500-iteration $n=100$ PPO run,
+Bernoulli-$0.1$ Graph-SND tracks full SND while reducing metric time by
+about $10\times$, and GPU timing up to $n=500$ follows the predicted
 $\binom{n}{2}/|E|$ speedup. Random $d$-regular expanders empirically
-approximate full SND nearly exactly, with
-$\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ at
-$\Theta(n\log n)$ edges across $n\in\{50,100,200,500\}$, and this
-near-unit behavior persists on a trained $n=100$ checkpoint. In DiCo diversity control,
-replacing full SND with sparse Graph-SND preserves reward and set-point
-tracking within observed seed variation while reducing per-call metric
-cost by ${\sim}9.5\times$ at $n=50$. A PettingZoo MPE panel with
-categorical policies and total-variation distance confirms that the
-graph aggregation is not tied to Gaussian policies or Wasserstein
-distances.
+achieve $\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ at
+$\Theta(n\log n)$ edges. In DiCo diversity control at $n=50$,
+Bernoulli-$0.1$ Graph-SND preserves reward and set-point tracking within
+observed seed variation while reducing per-call metric cost by
+${\sim}9.5\times$.
 \end{abstract}
 % ============================================================
 \section{Introduction}
 \label{sec:intro}
 
-Behavioural diversity is increasingly a first-class property of
+Behavioral diversity is increasingly a first-class property of
 multi-agent reinforcement learning (MARL) systems: heterogeneous
-policies specialise into complementary roles, remain robust under
+policies specialize into complementary roles, remain robust under
 observation noise and disturbances, and expose latent resilience
 skills invisible in reward curves alone
 \citep{bettini2023hetgppo, bettini2025snd}. System Neural Diversity
@@ -150,25 +141,25 @@ To our knowledge, no prior pairwise-diversity metric in MARL reports a
 deterministic expander-sparsification result tied to forwarding-index /
 multicommodity-flow structure.
 
-This paper does. We define Graph-SND, a graph-structured
-generalisation that computes pairwise distances only on the edges of
-a user-specified graph $G$ and aggregates them by a normalised
+We address this aggregation problem by defining Graph-SND, a graph-structured
+generalization that computes pairwise distances only on the edges of
+a user-specified graph $G$ and aggregates them by a normalized
 weighted mean. The construction is minimal: it extends rather than
 replaces SND, recovers SND exactly on $G = K_n$, and admits two
 interpretations distinguished entirely by the choice of $G$. A
 \emph{fixed} $G$ encoding task-relevant interaction structure
-(communication graph, $k$-nearest neighbours in observation space, a
-user prior) makes Graph-SND a \emph{localised diversity measure} that
+(communication graph, $k$-nearest neighbors in observation space, a
+user prior) makes Graph-SND a \emph{localized diversity measure} that
 quantifies heterogeneity among interacting pairs and ignores pairs
 that do not; this is cheaper to compute and aligns the metric
 semantics with coordination structure, at the cost of being strictly
 weaker than $\SND$ (Remark~\ref{rem:semantics}). A \emph{random} $G$
-including each pair independently with probability $p$ makes
-Graph-SND an unbiased \emph{sampling estimator} of $\SND$ under
-Horvitz--Thompson weights, with a Hoeffding-type $O(1/\sqrt{m})$
-error bound in the number of sampled edges $m$, independent of $n$:
-$\SND$ can be approximated to target precision $\varepsilon$ using
-$O(\varepsilon^{-2}\log(1/\delta))$ distance evaluations.
+supports two estimators of full $\SND$: an unconditionally unbiased
+Horvitz--Thompson estimator and the normalized Graph-SND sample mean,
+which has a Hoeffding-type $O(1/\sqrt{m})$ error bound conditional on
+the sampled edge count $m$. Thus $\SND$ can be approximated to target
+precision $\varepsilon$ using $O(\varepsilon^{-2}\log(1/\delta))$
+distance evaluations once $m$ edges are sampled.
 
 Empirically, the most distinctive fixed-$G$ finding is that
 $d$-regular expander choices of $G$ deliver deterministic
@@ -179,12 +170,12 @@ substantially lower forwarding index than matched-edge Bernoulli,
 uniform, and $k$-NN baselines.
 
 \paragraph{Contributions.}
-(i) A graph-structured generalisation $\SNDG$
+(i) A graph-structured generalization $\SNDG$
 (Definition~\ref{def:graph-snd}) that subsumes $\SND$ on the
 complete graph and supports both fixed and random $G$, with two
-operational interpretations selected by $G$: localised diversity
-measure (fixed $G$) and Horvitz--Thompson sampling estimator of
-$\SND$ (random $G$). (ii) Seven formal results
+operational interpretations selected by $G$: localized diversity
+measure (fixed $G$) and sparse estimation of $\SND$ (random $G$).
+(ii) Seven formal results
 (Section~\ref{sec:theory}, Appendix~\ref{app:proofs}): exact
 recovery on $K_n$, non-negativity, graph-automorphism invariance,
 $O(|E|)$ complexity, Horvitz--Thompson unbiasedness and Hoeffding-type
@@ -199,12 +190,12 @@ frozen-checkpoint, $500$-iter online PPO at $n{=}100$, GPU
 frozen-init), and DiCo closed-loop integration on VMAS Dispersion
 ($n{=}10$, three seeds) where $k$-NN (fixed-$G$), Bernoulli-$0.1$
 (random-$G$), and random $d$-regular expander Graph-SND (with
-$d{=}\Theta(\log n)$) all track the full-$\SND$ set point and match
-full-$\SND$ reward within cross-seed variance at reduced per-call
+$d{=}\Theta(\log n)$) all track the DiCo set point and match the
+full-SND controller's reward within cross-seed variance at reduced per-call
 cost, extended at $n{=}50$ to a
 three-seed, three-set-point \emph{head-to-head} sweep that trains
-both Bernoulli-$0.1$ Graph-SND and full SND and finds
-statistically indistinguishable training outcomes at a measured
+both Bernoulli-$0.1$ Graph-SND and full SND and finds training
+outcomes within observed seed-to-seed variation at a measured
 ${\sim}9.5{\times}$ cheaper metric call, plus a deterministic
 expander ablation showing near-unit relative error
 ($\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$) at
@@ -213,12 +204,10 @@ trained $n{=}100$ checkpoint panel. We additionally validate transfer to
 a non-VMAS, non-Gaussian regime via PettingZoo MPE simple-spread at
 $n{=}10$ with categorical policies and TVD distance, where sparse
 Graph-SND remains close to full SND while reducing per-call metric cost.
-The construction is deliberately narrow: we do not propose a new
-training algorithm, policy architecture, or diversity-inducing
-objective; we propose a drop-in replacement for SND aggregation that is
-both computationally cheaper and, with expander choices of $G$, a
-deterministic near-linear-cost approximation of pairwise diversity
-aggregates.
+The construction isolates the aggregation bottleneck: it leaves the
+policy architecture, training algorithm, and pairwise distance intact,
+while turning SND's complete pairwise average into a sparse estimation
+and graph-sparsification layer for pairwise diversity aggregates.
 
 % ============================================================
 \section{Related Work}
@@ -251,8 +240,8 @@ metric with minor modifications.
 Robotics heterogeneity is often structural: species-trait matrices
 \citep{prorok2017impact}, performance proxies \citep{li2004learning},
 fixed-class counts \citep{twu2014measure}, which do not always
-coincide with behavioural diversity \citep{stanley2019designing}. The
-closest behavioural-space metric is Hierarchic Social Entropy
+coincide with behavioral diversity \citep{stanley2019designing}. The
+closest behavioral-space metric is Hierarchic Social Entropy
 \citep{balch2000hse}, which \citet{bettini2025snd} show grows with
 the number of equidistant agents and does not capture redundancy,
 whereas $\SND$ is invariant to the former and decreasing in the
@@ -289,11 +278,11 @@ Remark~\ref{rem:serfling} notes the
 one-dimensional $U$-statistic without replacement
 \citep{hoeffding1948class, hoeffding1963probability}. Since SND was
 introduced, several lines of follow-up work have used it without
-addressing its $O(n^2)$ aggregation cost: DiCo regularises training
+addressing its $O(n^2)$ aggregation cost: DiCo regularizes training
 to a prescribed diversity set-point \citep{bettini2024dico};
 \citet{bettini2024impact} use SND as a measurement tool for studying
-the downstream effects of behavioural diversity;
-\citet{amir2025diversity} analyse \emph{when} diversity is beneficial
+the downstream effects of behavioral diversity;
+\citet{amir2025diversity} analyze \emph{when} diversity is beneficial
 via reward-curvature conditions; and \citet{tessera2024hypermarl} use
 SND as a diagnostic for an agent-conditioned hypernetwork approach to
 the diversity--scalability tradeoff. All four treat the metric as a
@@ -490,32 +479,43 @@ statement excludes the cost of constructing $G$.
 \label{sec:method:estimator}
 
 When the goal is to approximate full $\SND$ at reduced cost, we derive
-sampling-based estimators from the same graph formalism. Include each pair
-$\{i,j\} \in \Pairs$ in $E$ independently with probability $p \in (0, 1]$,
-with Horvitz--Thompson weights $w_{ij} = 1/p$ for $\{i,j\} \in E$. Denote
-this random graph $G_p$.
+sampling-based estimators from the same graph formalism. Let $G_p$ include
+each pair $\{i,j\} \in \Pairs$ independently with probability
+$p \in (0, 1]$. We distinguish two random-graph statistics. The
+Horvitz--Thompson statistic uses the population normalization
+$|\Pairs|^{-1}$ and is unbiased even when the sampled edge set is empty
+(the empty sum contributes zero). The normalized Graph-SND statistic uses
+the realized sample size $m=|E(G_p)|$ and is the sample mean over sampled
+edges; it is defined conditional on $m\geq1$ and is the quantity used in
+the concentration theorem below.
 
 \begin{proposition}[Unbiasedness]
 \label{prop:unbiased}
-The estimator
+With weights $w_{ij}=1/p$, the Horvitz--Thompson estimator
 \[
-\widehat{\SND}(G_p) \;:=\; |\Pairs|^{-1}
+\widehat{\SND}_{\mathrm{HT}}(G_p) \;:=\; |\Pairs|^{-1}
 \sum_{\{i,j\} \in E(G_p)} w_{ij}\, d(i,j)
 \]
-satisfies $\E_{G_p}\bigl[\widehat{\SND}(G_p)\bigr] = \SND(\mathbf{D})$.
+satisfies
+$\E_{G_p}\bigl[\widehat{\SND}_{\mathrm{HT}}(G_p)\bigr]
+= \SND(\mathbf{D})$.
 \end{proposition}
 
-\begin{remark}[HT weights make $\SNDG$ a sample mean]
+\begin{remark}[Normalized Graph-SND is a sample mean]
 \label{rem:ht-sample-mean}
-Under Horvitz--Thompson weights, $W(G_p) = |E(G_p)|/p$, so $\SNDG$ reduces
-to the uniform sample mean:
+If the same $1/p$ weights are inserted into the normalized Graph-SND
+definition, $W(G_p) = |E(G_p)|/p$, so the weights cancel and $\SNDG$
+reduces to the uniform sample mean:
 \[
 \SNDG(\mathbf{D}, G_p)
 \;=\; \frac{p}{|E(G_p)|} \sum_{\{i,j\} \in E(G_p)} \frac{1}{p}\, d(i,j)
 \;=\; \frac{1}{|E(G_p)|} \sum_{\{i,j\} \in E(G_p)} d(i,j).
 \]
-This is the \emph{uniform-weight variant} used in
-Theorem~\ref{thm:concentration}; it differs from \mbox{$\widehat{\SND}$} only in normalization.
+This \emph{uniform-weight variant} differs from
+$\widehat{\SND}_{\mathrm{HT}}$ in its random normalization. It is used in
+Theorem~\ref{thm:concentration} conditional on $|E(G_p)|\geq1$. In the
+DiCo Bernoulli implementation, an empty draw falls back to the full pair
+set for that call so the control ratio remains well-defined.
 \end{remark}
 
 \begin{theorem}[Concentration]
@@ -535,6 +535,22 @@ with probability at least $1 - \delta$ over the randomness of $G_p$,
 \end{equation}
 \end{theorem}
 
+\begin{remark}[Unconditional Bernoulli form]
+\label{rem:chernoff-m}
+Let $\mu=p|\Pairs|$ be the expected number of sampled edges in $G_p$.
+Combining Theorem~\ref{thm:concentration} with the Chernoff bound
+$\Prob(|E(G_p)|<\mu/2)\leq e^{-\mu/8}$ gives, for any
+$\delta\in(0,1)$, with probability at least
+$1-\delta-e^{-\mu/8}$,
+\[
+\abs{\SNDG^{\mathrm{u}}(\mathbf{D},G_p)-\SND(\mathbf{D})}
+\;\leq\; D_{\max}\sqrt{\frac{\log(2/\delta)}{\mu}},
+\]
+on the event $|E(G_p)|\geq1$. Thus Bernoulli sampling has the same
+finite-population $O(1/\sqrt{p|\Pairs|})$ rate up to constants whenever
+the expected edge count is not tiny.
+\end{remark}
+
 \begin{remark}[Sharper finite-population bounds]
 \label{rem:serfling}
 For sampling fractions $m/|\Pairs|$ bounded away from zero, Serfling's
@@ -544,9 +560,9 @@ sharper. See also \citet{bardenet2015concentration} for further
 refinements and an empirical-Bernstein variant.
 \end{remark}
 
-Theorem~\ref{thm:concentration} gives a rate of $O(1/\sqrt{m})$ in the
-number of sampled edges, independent of the total number of agents. For
-target error $\varepsilon$, it suffices to sample
+Theorem~\ref{thm:concentration} gives a conditional rate of
+$O(1/\sqrt{m})$ in the number of sampled edges. For target error
+$\varepsilon$, it suffices to sample
 $m = O\bigl(D_{\max}^2\, \varepsilon^{-2}\, \log(1/\delta)\bigr)$ edges,
 which for large $n$ is vastly smaller than $\binom{n}{2}$.
 
@@ -585,8 +601,8 @@ Measurement is demonstrated to $n{=}500$ (frozen-policy timing and
 expander ablation); training is demonstrated to $n{=}100$ for
 online PPO and to $n{=}50$ for DiCo set-point control, where a
 head-to-head Bernoulli-$0.1$ vs full-SND sweep over three seeds and
-three set points shows statistically indistinguishable training
-quality (sub-$1\%$ relative tracking error for both estimators,
+three set points shows training quality within observed seed-to-seed
+variation (sub-$1\%$ relative tracking error for both estimators,
 reward within $1$ SEM per cell) at a measured ${\sim}9.5{\times}$
 lower per-call metric cost for Bernoulli-$0.1$
 (Appendix~\ref{app:dico-n50-sweep}).
@@ -597,13 +613,13 @@ lower per-call metric cost for Bernoulli-$0.1$
 We use VMAS Multi-Agent Goal Navigation with continuous actions,
 $\texttt{num\_envs}{=}32$ parallel environments, and a rollout
 horizon of $128$ steps. Each agent $i$ has an independently
-parameterised Gaussian MLP policy $\policy{i}$ (two hidden layers of
+parameterized Gaussian MLP policy $\policy{i}$ (two hidden layers of
 width $64$, per-dimension learnable $\log\sigma$; the heterogeneous
 set-up of \citealp{bettini2025snd}). Policies are trained with
 Independent PPO (hyperparameters in Appendix~\ref{app:hyperparams})
 with no parameter sharing. For each $n \in \{4, 8, 16\}$ we save two
 checkpoints: \emph{iter-0} (random init, near-homogeneous) and
-\emph{iter-100} (trained, behaviourally heterogeneous, $\SND$ values
+\emph{iter-100} (trained, behaviorally heterogeneous, $\SND$ values
 comparable to \citealp{bettini2025snd}). The Monte Carlo estimator
 of Eq.~\eqref{eq:dij} is evaluated on the rollout set $\Rollouts$
 obtained by running the frozen policies for $128$ steps across $32$
@@ -623,8 +639,8 @@ iter~0 and iter~100 checkpoints, $|\SNDG - \SND| = 0.0$ to numerical
 precision (Figure~\ref{fig:recovery}). \emph{Unbiasedness}
 (Proposition~\ref{prop:unbiased}): at $n{=}8$, drawing $2{,}000$
 Bernoulli-$p$ graphs per $p \in \{0.1, 0.25, 0.5, 0.75\}$, the $95\%$
-CI for $\widehat{\SND}(G_p)$ contains $\SND(\mathbf{D})$ in every cell
-on both checkpoints, and the maximum standardised deviation
+CI for $\widehat{\SND}_{\mathrm{HT}}(G_p)$ contains $\SND(\mathbf{D})$ in every cell
+on both checkpoints, and the maximum standardized deviation
 $|\mathrm{bias}|/\mathrm{SE}$ is $1.42$, well below $|z_{0.975}|{=}1.96$
 (Figure~\ref{fig:unbiasedness}). \emph{Concentration}
 (Theorem~\ref{thm:concentration}): at $n{=}16$ with $2{,}000$
@@ -639,7 +655,7 @@ focuses on scaling.
 
 To translate the $|E|$ versus $\binom{n}{2}$ count of
 Proposition~\ref{prop:complexity} into wall-clock terms, we measure
-$\widehat{\SND}(G_p)$ against $\SND$ across three regimes: (i) a
+$\SNDG^{\mathrm{u}}(G_p)$ against $\SND$ across three regimes: (i) a
 CPU frozen-checkpoint sweep at $n \in \{4, 8, 16\}$ and $p \in
 \{0.1, 0.25, 0.5, 0.75, 1.0\}$, $20$ trials per cell; (ii) the online
 GPU training log at $n{=}100$ of
@@ -647,15 +663,19 @@ Section~\ref{sec:experiments:scaling}; and (iii) a GPU frozen-init
 sweep at $n \in \{100, 250, 500\}$ on a single RTX~4090 in fp32,
 $20$ trials per cell, with \texttt{torch.cuda.synchronize} bracketing
 every \texttt{perf\_counter}. In (iii) we instantiate $n$
-independently-initialised Gaussian MLPs and evaluate them on one
+independently-initialized Gaussian MLPs and evaluate them on one
 synthetic rollout batch of $T_{\mathrm{total}} = 4{,}096$
 observations per agent, isolating the aggregation cost.
+The Bernoulli sampled timings include random edge construction and
+host-to-device edge transfer in each trial; Proposition~\ref{prop:complexity}
+separates graph construction only because fixed and structured graphs
+can have application-dependent build costs.
 
-Figure~\ref{fig:timing-n500} summarises all three regimes. At the
+Figure~\ref{fig:timing-n500} summarizes all three regimes. At the
 apex, $n{=}500$ has $\binom{500}{2}{=}124{,}750$ pairs and
 Bernoulli-$0.1$ sampling retains
 $\mathbb{E}[|E(G_{0.1})|]\!\approx\!12{,}475$ edges: full $\SND$
-takes $15{,}502.8\,\text{ms}$ per call and $\widehat{\SND}(G_{0.1})$
+takes $15{,}502.8\,\text{ms}$ per call and $\SNDG^{\mathrm{u}}(G_{0.1})$
 takes $1{,}553.6\,\text{ms}$, a mean $9.98\times$ speedup (median
 $9.99\times$). Intermediate points match: at $n{=}250$, $3{,}864.6$
 vs $384.7\,\text{ms}$ ($10.04\times$); at $n{=}100$, $614.9$ vs
@@ -685,7 +705,7 @@ Appendix~\ref{app:verify} (Figure~\ref{fig:timing}).
 \begin{figure}[t]
 \centering
 \includegraphics[width=0.85\linewidth]{figures/timing_n500.pdf}
-\caption{Wall-clock scaling of $\widehat{\SND}(G_p)$ versus $\SND$
+\caption{Wall-clock scaling of $\SNDG^{\mathrm{u}}(G_p)$ versus $\SND$
 across $n\in\{4,\ldots,500\}$ and three hardware/call regimes.
 \textbf{Left:} speedup $T_{\mathrm{full}} / T_{\mathrm{sampled}}$
 versus Bernoulli $p$ at $n{=}500$ on a single RTX~4090 in fp32, 20
@@ -709,13 +729,13 @@ the $125\times$ span of $n$ with no decay at scale.}
 The frozen-init GPU sweep of Section~\ref{sec:experiments:timing}
 isolates aggregation cost. To show that the same speedup and
 concentration bounds hold \emph{under training}, we train $100$
-independently parameterised Gaussian policies on VMAS Multi-Agent
+independently parameterized Gaussian policies on VMAS Multi-Agent
 Goal Navigation using the Section~\ref{sec:experiments:setup} IPPO
 configuration, with scenario parameters auto-scaled for the larger
 team ($\texttt{world\_spawning\_x}{=}\texttt{world\_spawning\_y}{=}4.0$,
 $\texttt{agent\_radius}{=}0.03$, $\texttt{num\_envs}{=}32$). Every
 $25$ PPO iterations we log $\SND(\mathbf{D})$ (all
-$\binom{100}{2}{=}4{,}950$ pairs) and $\widehat{\SND}(G_{0.1})$
+$\binom{100}{2}{=}4{,}950$ pairs) and $\SNDG^{\mathrm{u}}(G_{0.1})$
 (one Bernoulli-$0.1$ subsample) together with per-call wall-clock,
 timed with \texttt{cuda.synchronize} on both sides of every
 \texttt{perf\_counter}.
@@ -724,8 +744,8 @@ Figure~\ref{fig:scaling-n100} reports the full trajectory. The
 $\sim\!10\times$ speedup predicted by
 Proposition~\ref{prop:complexity} is sustained throughout, staying in
 $[9.0, 10.9]\times$ with no trend as policies diversify, and
-$\widehat{\SND}(G_{0.1})$ tracks $\SND(\mathbf{D})$ essentially
-indistinguishably (maximum gap $\sim 2\%$) at every one of $21$
+$\SNDG^{\mathrm{u}}(G_{0.1})$ closely tracks $\SND(\mathbf{D})$
+(maximum gap $\sim 2\%$) at every one of $21$
 logged iterations, extending the concentration guarantee of
 Theorem~\ref{thm:concentration} from the frozen-checkpoint regime to
 an active training run. The underlying $\SND$ trajectory itself
@@ -739,8 +759,8 @@ iter~$500$); the point is that Graph-SND tracks it correctly.
 \caption{Graph-SND scaling on a $n=100$ PPO training run over 500
 iterations. Left: $\SND(\mathbf{D})$ (full pairwise computation
 over $\binom{100}{2} = 4{,}950$ pairs, blue) and
-$\widehat{\SND}(G_{0.1})$ (Horvitz--Thompson estimator on a
-Bernoulli-$0.1$ subsample, orange) evaluated on the current rollout
+$\SNDG^{\mathrm{u}}(G_{0.1})$ (normalized sample mean on a
+Bernoulli-$0.1$ subgraph, orange) evaluated on the current rollout
 batch every 25 iterations. The two curves overlap visually
 throughout, validating Theorem~\ref{thm:concentration} under
 non-stationary training dynamics. Right: wall-clock speedup
@@ -765,13 +785,13 @@ we integrate Graph-SND into the DiCo heterogeneity controller of
 \citet{bettini2024dico} on VMAS Dispersion \citep{bettini2022vmas}
 with $n{=}10$ agents, ten food targets, shared team reward, and
 Independent PPO with the HetControl heterogeneous MLP
-\citep{bettini2024dico}. DiCo regularises training toward a target
+\citep{bettini2024dico}. DiCo regularizes training toward a target
 diversity $\SND_{\mathrm{des}}$ using the full $O(n^2)$ aggregator;
 we replace that aggregator with Graph-SND on either a dynamic
-per-environment $k$-nearest-neighbour graph ($k{=}3$ in observation
+per-environment $k$-nearest-neighbor graph ($k{=}3$ in observation
 space, $128$-env subsample), a Bernoulli-$0.1$ random subgraph, or a
-random $d$-regular expander graph with $d{=}3{=}\lceil\log_2
-10\rceil$ (parity-adjusted so $nd$ is even), resampled each
+random $d$-regular expander graph with $d{=}3$ (one below
+$\lceil\log_2 10\rceil{=}4$ so $nd$ is even), resampled each
 diversity call on the same RNG schedule as Bernoulli. We compare
 five configurations at matched training budget ($167$
 iterations, ${\approx}10^7$ frames) across three seeds: diversity
@@ -780,8 +800,12 @@ pairwise $\SND$ on $K_n$, DiCo with $k$-NN Graph-SND, DiCo with
 Bernoulli-$0.1$ Graph-SND, and DiCo with expander Graph-SND; all
 controlled runs use $\SND_{\mathrm{des}}{=}0.1$.
 
-Figure~\ref{fig:dico-dispersion-knn} summarises the five runs along
+Figure~\ref{fig:dico-dispersion-knn} summarizes the five runs along
 three axes (reward, applied-$\SND$ tracking, per-call metric cost).
+For sparse variants, applied $\SND$ denotes DiCo's post-scaling
+controller signal computed with the same Graph-SND estimator used
+during that run; for the full-SND arm it is the complete pairwise
+aggregate.
 Terminal mean reward (last $10$ iterations, three seeds) is
 $0.070\pm0.001$ for Bernoulli-$0.1$, $0.068\pm0.003$ for $k$-NN,
 $0.064\pm0.001$ for full $\SND$, $0.064\pm0.007$ for expander
@@ -807,8 +831,8 @@ reward penalty relative to full $\SND$ at this sample size, and
 (iii) at reduced per-call metric cost whenever $|E|\ll\binom{n}{2}$.
 Fixed-$G$ ($k$-NN), random edge sampling (Bernoulli-$0.1$), and
 random $d$-regular expanders provide complementary operating points
-($k$-NN preserves structured locality; Bernoulli-$0.1$ minimises
-metric cost; expanders realise the deterministic near-linear
+($k$-NN preserves structured locality; Bernoulli-$0.1$ minimizes
+metric cost; expanders realize the deterministic near-linear
 $|E|{=}\Theta(n\log n)$ regime from Section~\ref{sec:experiments:expander}
 inside the live controller). Absolute per-call times here
 are GPU-measured inside the DiCo training loop at the minibatched
@@ -820,11 +844,12 @@ regimes is the $\binom{n}{2}/|E|$ ratio of
 Proposition~\ref{prop:complexity}.
 A head-to-head at $n{=}50$ confirms this directly: training the same
 $3$-seed $\times\,3$-set-point grid twice---once with
-Bernoulli-$0.1$ Graph-SND, once with full SND---yields
-statistically indistinguishable reward and applied-$\SND$ tracking
-in every cell ($0.42$--$0.53\%$ relative tracking error vs
-$0.31$--$0.37\%$ for full SND; per-cell reward means overlap within
-one SEM) at a measured $9.25$--$9.63\times$ lower per-call metric
+Bernoulli-$0.1$ Graph-SND, once with full SND---yields reward and
+applied-$\SND$ tracking within observed seed-to-seed variation
+($0.42$--$0.53\%$ relative tracking error vs $0.31$--$0.37\%$ for
+full SND; paired mean reward difference
+$-6.2{\times}10^{-4}\pm9.2{\times}10^{-3}$ SEM across the nine
+matched cells) at a measured $9.25$--$9.63\times$ lower per-call metric
 cost, matching the $\binom{n}{2}/\mathbb{E}[|E|]{=}10$ prediction
 of Proposition~\ref{prop:complexity};
 Appendix~\ref{app:dico-n50-sweep} reports the $18$-run head-to-head
@@ -900,7 +925,7 @@ $p{=}|E|/|\Pairs|$; \emph{(iii)}~a uniform-sample graph of size~$|E|$;
 Each configuration is repeated over 5~graph seeds.
 Policy rollouts use the frozen-init protocol of
 Section~\ref{sec:experiments:timing} (synthetic observations,
-independently-initialised Gaussian MLPs, $32$~vectorised envs,
+independently-initialized Gaussian MLPs, $32$~vectorized envs,
 $128$~steps).
 We compute full $\SND$ on~$K_n$, then $\SNDG^{\mathrm{u}}$ on each
 sub-graph, the empirical ratio $\SNDG^{\mathrm{u}}/\SND$, and the edge
@@ -915,13 +940,13 @@ panel on policies loaded from the overnight
 (Appendix~\ref{app:expander-extra}, Figure~\ref{fig:expander-distortion-checkpoint}).
 
 \paragraph{Results.}
-Figure~\ref{fig:expander-distortion} summarises the experiment.
+Figure~\ref{fig:expander-distortion} summarizes the experiment.
 All random $d$-regular graphs are certified Ramanujan
 ($\lambda_2{\leq}2\sqrt{d{-}1}$) across every $(n,d)$ pair.
 The empirical ratio $\SNDG^{\mathrm{u}}/\SND$ is within
 $[0.9987,\,1.0013]$ for $d$-regular expanders at \emph{all} scales,
-including $n{=}500$ where $d{=}9$ uses only $5{,}250$ of $124{,}750$
-pairs ($4.2\%$)---a $23.8\times$ edge reduction with
+including $n{=}500$ where $d{=}9$ uses only $2{,}250$ of $124{,}750$
+pairs ($1.8\%$)---a $55.4\times$ edge reduction with
 relative distortion below $0.04\%$.
 The $d$-regular family consistently achieves the tightest ratio at
 every edge budget, outperforming Bernoulli, uniform, and $k$-NN
@@ -975,7 +1000,7 @@ and similarly small absolute bias. This does not claim SOTA MPE
 performance; it is a regime-transfer check that Graph-SND's
 distance-agnostic graph aggregation behaves as expected beyond the
 Gaussian/VMAS setting. The higher trained-policy violation rate reflects
-larger absolute $\SND$ scale on specialised policies under a
+larger absolute $\SND$ scale on specialized policies under a
 fixed-threshold metric, not estimator degradation, as evidenced by the
 small max bias.
 
@@ -1001,7 +1026,7 @@ small max bias.
 \label{sec:discussion}
 
 Graph-SND replaces the aggregation step of $\SND$ with a
-graph-parameterised construction that recovers $\SND$ exactly on
+graph-parameterized construction that recovers $\SND$ exactly on
 $K_n$ and scales linearly in $|E|$. Because the graph layer only sees
 pairwise dissimilarities $d(i,j)$, the same construction is a generic
 sparsification template for pairwise-aggregate diversity metrics beyond
@@ -1033,7 +1058,7 @@ variant, as validated on VMAS Dispersion.
 \toprule
 Goal & Graph choice & Theorem support & When to use & Cost profile \\
 \midrule
-Estimation of full $\SND$ & Bernoulli-$p$ random graph & Prop.~\ref{prop:unbiased}, Thm.~\ref{thm:concentration} & Unbiased, compute-cheap estimate of global pairwise diversity & $\E[|E|]=p\binom{n}{2}$; speedup tracks $\approx1/p$ \\
+Estimation of full $\SND$ & Bernoulli-$p$ random graph & Prop.~\ref{prop:unbiased}, Thm.~\ref{thm:concentration} & HT-unbiased estimate or normalized sample mean of global pairwise diversity & $\E[|E|]=p\binom{n}{2}$; speedup tracks $\approx1/p$ \\
 Modeling local semantics & Structured fixed graph ($k$-NN, communication topology) & Prop.~\ref{prop:nonneg}, Remark~\ref{rem:semantics} & Only task-relevant interactions should contribute to diversity & $|E|$ set by structure; interpretable local signal \\
 Deterministic sparse approximation & Random $d$-regular expander ($d=\Theta(\log n)$) & Thm.~\ref{thm:distortion}, Cor.~\ref{cor:expander-distortion} & Deterministic fixed-$G$ approximation with strong worst-case structure & $|E|=\Theta(n\log n)$; ratio in $[0.9987,1.0013]$ and $2$--$39\times$ lower $\pi(G)$ vs matched-edge baselines \\
 \bottomrule
@@ -1072,7 +1097,7 @@ categorical policies, TVD distance, $n{=}10$), but broader
 non-Gaussian coverage (more tasks, larger $n$, and additional
 dissimilarities beyond TVD) remains untested.
 \emph{(5) IPPO-only algorithm scope:} every RL result uses
-Independent PPO; extending to centralised-critic and other
+Independent PPO; extending to centralized-critic and other
 policy-gradient algorithms covered by DiCo is a straightforward but
 untested extension.
 
@@ -1085,15 +1110,15 @@ approximate $d$ beyond the $n{=}10$ MPE/TVD panel;
 Theorem~\ref{thm:distortion} beyond the conditional spectral bound of
 Remark~\ref{rem:spectral-sharpening}; and (iv) a broader DiCo$+\SNDG$ study, over larger $n$, tasks,
 set-points, and the interaction of sampling noise in
-$\widehat{\SND}(G_p)$ with DiCo's set-point regulation.
+$\SNDG^{\mathrm{u}}(G_p)$ with DiCo's set-point regulation.
 \section{Conclusion}
 \label{sec:conclusion}
 
 We introduced Graph-SND, replacing SND's $\binom{n}{2}$-pair average
-with a normalised weighted mean over the edges of a user-specified
-graph $G$: a localised diversity measure for fixed $G$, and an
-unbiased Horvitz--Thompson sampling estimator of $\SND$ for random
-$G$. Seven formal results and experiments across
+with a normalized weighted mean over the edges of a user-specified
+graph $G$: a localized diversity measure for fixed $G$, and a sparse
+estimation framework for full $\SND$ under random $G$. Seven formal
+results and experiments across
 $n\in\{4,8,16,100,250,500\}$ on VMAS Goal Navigation (measurement to
 $n{=}500$), plus a non-VMAS transfer panel on MPE simple-spread at
 $n{=}10$ (categorical policies, TVD distance), online training at
@@ -1103,8 +1128,8 @@ $\SNDG$ is a drop-in replacement for $\SND$: recovery is numerically
 exact, concentration is respected on every cell, wall-clock cost tracks
 $\binom{n}{2}/|E|$ across a
 $125\times$ span of $n$, and both $k$-NN and Bernoulli-$0.1$
-substitutions inside DiCo match the full-$\SND$ set point to within
-$10^{-3}$ and full-$\SND$ reward within seed variance. The choice of
+substitutions inside DiCo match the controller set point to within
+$10^{-3}$ and the full-SND controller's reward within seed variance. The choice of
 $G$ selects whether the signal measures local diversity or
 approximates global diversity at reduced cost.
 \codelocation
@@ -1209,14 +1234,14 @@ For each $\{i,j\} \in \Pairs$, let $Z_{ij} = \ind[\{i,j\} \in E(G_p)]$.
 By construction, $\{Z_{ij}\}_{\{i,j\} \in \Pairs}$ are independent
 Bernoulli$(p)$ random variables. With $w_{ij} = 1/p$ on edges of $G_p$,
 \[
-\widehat{\SND}(G_p)
+\widehat{\SND}_{\mathrm{HT}}(G_p)
 \;=\; |\Pairs|^{-1} \sum_{\{i,j\} \in E(G_p)} w_{ij}\, d(i,j)
 \;=\; |\Pairs|^{-1} \sum_{\{i,j\} \in \Pairs} Z_{ij} \cdot \tfrac{1}{p}
 \cdot d(i,j).
 \]
 Taking expectation and using $\E[Z_{ij}] = p$,
 \[
-\E_{G_p}\!\left[\widehat{\SND}(G_p)\right]
+\E_{G_p}\!\left[\widehat{\SND}_{\mathrm{HT}}(G_p)\right]
 \;=\; |\Pairs|^{-1} \sum_{\{i,j\} \in \Pairs}
 p \cdot \tfrac{1}{p} \cdot d(i,j)
 \;=\; |\Pairs|^{-1} \sum_{\{i,j\} \in \Pairs} d(i,j)
@@ -1465,7 +1490,7 @@ The $n = 100$ scaling run of Section~\ref{sec:experiments:scaling} additionally 
 \label{app:verify}
 
 This appendix contains the protocols, figures, and diagnostics for
-the three structural verifications summarised in
+the three structural verifications summarized in
 Section~\ref{sec:experiments:verify}: exact recovery on $K_n$
 (Proposition~\ref{prop:recovery}), unbiasedness of the
 Horvitz--Thompson estimator (Proposition~\ref{prop:unbiased}), and
@@ -1493,13 +1518,13 @@ both cases (the y-axis is shown at $10^{-12}$ resolution for context).}
 \end{figure}
 
 \paragraph{Unbiasedness (Proposition~\ref{prop:unbiased}).} We test
-$\E_{G_p}[\widehat{\SND}(G_p)] = \SND(\mathbf{D})$ at $n{=}8$ by
+$\E_{G_p}[\widehat{\SND}_{\mathrm{HT}}(G_p)] = \SND(\mathbf{D})$ at $n{=}8$ by
 drawing $2{,}000$ independent Bernoulli-$p$ graphs for each
-$p \in \{0.1, 0.25, 0.5, 0.75\}$, computing $\widehat{\SND}$ on each,
+$p \in \{0.1, 0.25, 0.5, 0.75\}$, computing $\widehat{\SND}_{\mathrm{HT}}$ on each,
 and reporting the sample mean with a $95\%$ CI
 (Figure~\ref{fig:unbiasedness}). The CI contains $\SND(\mathbf{D})$
 in every cell across both checkpoints. As a sharper test, the
-standardised deviation $|\mathrm{bias}|/\mathrm{SE}$ is approximately
+standardized deviation $|\mathrm{bias}|/\mathrm{SE}$ is approximately
 $\mathcal{N}(0,1)$ per cell under an unbiased Gaussian-error
 estimator; the maximum observed value across all eight
 $(\text{checkpoint}, p)$ cells is $1.42$, well below
@@ -1510,7 +1535,7 @@ widening CIs at small $p$.
 \centering
 \includegraphics[width=0.85\linewidth]{figures/unbiasedness.pdf}
 \caption{Proposition~\ref{prop:unbiased}: empirical unbiasedness of
-$\widehat{\SND}(G_p)$ at $n=8$. Blue dots and whiskers are the sample
+$\widehat{\SND}_{\mathrm{HT}}(G_p)$ at $n=8$. Blue dots and whiskers are the sample
 mean and 95\% confidence interval over 2{,}000 random graphs per $p$;
 the dashed line is the true $\SND(\mathbf{D})$. Annotations give the
 standardized deviation $|\mathrm{bias}|/\mathrm{SE}$, all of which are
@@ -1625,6 +1650,39 @@ speedups reported here.}
 \label{fig:timing}
 \end{figure}
 
+\paragraph{Graph construction microbenchmark.}
+Because Proposition~\ref{prop:complexity} counts pairwise distance
+evaluations and excludes graph construction, we separately time the
+CPU-side graph builders used by the experiments. Table~\ref{tab:graph-build}
+reports median wall-clock over $50$ trials for $n\in\{50,100\}$ and
+$20$ trials for $n=500$ at the same edge budgets used in the expander
+ablation. Even exact $k$-NN construction remains below $5$ ms at
+$n=500$ in this implementation, far below the full pairwise metric time
+reported in Section~\ref{sec:experiments:timing}; Bernoulli timings in
+Figure~\ref{fig:timing-n500} already include sampling and edge-transfer
+overhead.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Graph builder} & \textbf{$n=50$} & \textbf{$n=100$} & \textbf{$n=500$} \\
+\midrule
+Bernoulli & $0.016$ ms & $0.036$ ms & $0.875$ ms \\
+Uniform-size sample & $0.014$ ms & $0.022$ ms & $0.440$ ms \\
+Random $d$-regular & $0.159$ ms & $0.345$ ms & $2.352$ ms \\
+Exact $k$-NN & $0.370$ ms & $0.734$ ms & $4.091$ ms \\
+\bottomrule
+\end{tabular}
+\caption{Median CPU graph-construction time at matched edge budgets
+$|E|\approx nd/2$, with $d\in\{6,7,9\}$ for
+$n\in\{50,100,500\}$. These timings isolate graph construction only;
+metric-call timings are reported separately in
+Figure~\ref{fig:timing-n500}.}
+\label{tab:graph-build}
+\end{table}
+
 % ------------------------------------------------------------------
 % Appendix: DiCo head-to-head at n=50 -- Bernoulli-0.1 Graph-SND vs
 % full SND over the same 3 seeds x 3 desired_snd grid. Inputs:
@@ -1659,17 +1717,17 @@ variant is $\mathbb{E}[|E(G_{0.1})|]{=}0.1\binom{50}{2}{=}122.5$
 against $\binom{50}{2}{=}1{,}225$ under full SND ($10\%$ edge
 density), a nominal $10\times$ reduction in per-call metric work.
 
-Figure~\ref{fig:dico-n50-bern-vs-full} summarises the nine paired
+Figure~\ref{fig:dico-n50-bern-vs-full} summarizes the nine paired
 runs along four axes. Panel~(a) overlays the per-iteration applied
 $\SND{=}\SND_t\,s_t$ trajectories for the two estimators at each set
 point; after a ${\sim}25$-iteration transient every cell settles
 onto its target line and both estimators produce visually
 overlapping bands for the remaining ${\sim}140$ iterations of
 training. Panel~(b) shows the corresponding per-iteration episode
-reward: the two estimators produce statistically indistinguishable
-reward curves across all three set points, with higher set points
+reward: the two estimators produce reward curves within observed
+seed-to-seed variation across all three set points, with higher set points
 yielding monotonically higher terminal reward (consistent with
-Dispersion rewarding role specialisation among a large team).
+Dispersion rewarding role specialization among a large team).
 Panel~(c) quantifies steady-state tracking: the late-window
 ($50$-iteration tail) relative error
 $|\mathrm{applied}\,\SND - \SND_{\mathrm{des}}|/\SND_{\mathrm{des}}$
@@ -1696,9 +1754,10 @@ aggregated across three seeds per cell. Applied $\SND$ is within
 $0.6\%$ of the target for both estimators at all three set points;
 cross-seed standard error on applied $\SND$ is at most
 $1.2\times 10^{-4}$ (Bernoulli-$0.1$) and $1.0\times 10^{-4}$
-(full). Per-cell reward means overlap within one SEM in every cell,
-so the two estimators produce statistically indistinguishable
-training outcomes at the sample sizes used here. The head-to-head
+(full). Across the nine matched $(\mathrm{seed},\SND_{\mathrm{des}})$
+cells, the paired mean reward difference (Bernoulli minus full) is
+$-6.2{\times}10^{-4}\pm9.2{\times}10^{-3}$ SEM, with a two-sided sign
+test $p{=}1.0$. The head-to-head
 thus upgrades the closed-loop conclusion of
 Section~\ref{sec:experiments:dico-dispersion} from ``matches full
 $\SND$ at $n{=}10$'' to ``matches full $\SND$ at $n{=}50$ over three
@@ -1715,11 +1774,11 @@ drop-in replacement for DiCo with full SND.
 \caption{DiCo head-to-head at $n{=}50$, $3{\times}3$ grid of seeds
 and set points, each cell trained twice with matched rollouts (one
 Bernoulli-$0.1$ Graph-SND, one full SND), $18$ runs total.
-\textbf{(a)}~Applied $\SND{=}\SND_t\,s_t$ per iteration; colour
+\textbf{(a)}~Applied $\SND{=}\SND_t\,s_t$ per iteration; color
 encodes $\SND_{\mathrm{des}}\in\{0.12,0.14,0.15\}$, solid lines are
 Bernoulli-$0.1$, dashed lines are full SND; bands are $\pm 1$ std
 across seeds. \textbf{(b)}~Mean episode reward on the same runs,
-same colour/line encoding. \textbf{(c)}~Late-window ($50$-iter tail)
+same color/line encoding. \textbf{(c)}~Late-window ($50$-iter tail)
 relative tracking error; full SND is slightly tighter than
 Bernoulli-$0.1$ but both remain well under $1\%$.
 \textbf{(d)}~Median per-call metric wall-clock; full SND median
