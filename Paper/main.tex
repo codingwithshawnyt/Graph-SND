@@ -87,56 +87,37 @@ Graph-Based Local Aggregation and Sampling-Based Estimation}
 \maketitle
 
 \begin{abstract}
-Graph-SND provides a deterministic expander-sparsification of pairwise
-diversity aggregation: random $d$-regular expanders achieve
+System Neural Diversity (SND) measures behavioral heterogeneity in
+multi-agent reinforcement learning by averaging pairwise distances over
+all $\binom{n}{2}$ agent pairs, so every measurement scales
+quadratically with team size. We introduce Graph-SND, a
+graph-structured replacement for this complete pairwise average that
+aggregates distances only over the edges of a user-specified graph
+$G$. The complete graph recovers SND exactly. A fixed $G$ yields a
+localized diversity measure at cost $O(|E|)$; a random edge sample
+supports a Horvitz--Thompson unbiased estimator of full SND and a
+normalized sample mean with $O(1/\sqrt{m})$ finite-population
+concentration in the number of sampled edges. For fixed graphs, we
+prove a deterministic distortion bound governed by the edge forwarding
+index, implying $O(\log n)$ worst-case distortion at
+$|E|=\Theta(n\log n)$ for expander graphs.
+Experiments show that, when full SND is the target, the quadratic
+aggregate can be sparsified without changing the measured signal in the
+regimes tested. On a
+500-iteration $n=100$ PPO run, Bernoulli-$0.1$ Graph-SND tracks full SND
+throughout training while reducing metric time by about $10\times$; GPU
+timing up to $n=500$ follows the predicted
+$\binom{n}{2}/|E|$ speedup. Random $d$-regular expanders empirically
+approximate full SND nearly exactly, with
 $\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ at
-$|E|{=}\Theta(n\log n)$ across $n\in\{50,100,200,500\}$, with
-$2$--$39\times$ lower forwarding index than matched-edge sparse
-baselines and persistence on a trained $n{=}100$ checkpoint. System
-Neural Diversity (SND) quantifies behavioral heterogeneity in
-multi-agent RL by averaging pairwise Wasserstein distances over all
-$\binom{n}{2}$ agent pairs, scaling as $O(n^2)$; its authors flag
-sparse-graph generalizations as open. We introduce Graph-SND, a
-graph-structured generalization that evaluates pairwise distances only
-on the edges of a user-specified graph $G$ and aggregates them as a
-normalized weighted mean. The construction recovers SND exactly when
-$G$ is complete and admits two interpretations selected by $G$: a
-\emph{fixed} $G$ encoding task-relevant interaction structure yields a
-localized diversity measure at cost $O(|E|)$; a \emph{random} $G$ with
-Horvitz--Thompson weights yields an unbiased estimator of full SND
-with a Hoeffding-type $O(1/\sqrt{m})$ error bound in the number of
-sampled edges $m$, independent of $n$. We prove seven properties
-(recovery, non-negativity, graph-automorphism invariance, complexity,
-unbiasedness, concentration, and a deterministic fixed-$G$ distortion
-bound via the edge forwarding index) and verify them on VMAS
-Multi-Agent Goal
-Navigation at $n\in\{4,8,16\}$, under a $500$-iteration PPO run at
-$n{=}100$, and in a frozen-init GPU timing sweep at
-$n\in\{100,250,500\}$: recovery is numerically exact, the concentration
-bound holds with zero violations across $24{,}000$ draws, and
-wall-clock speedup tracks the analytical $\binom{n}{2}/|E|$ ratio,
-sustaining $\sim\!10\times$ at $p{=}0.1$ across a $125\times$ span of
-$n$ and three hardware/call regimes. In a deterministic fixed-$G$
-expander ablation, random $d$-regular graphs achieve
-$\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ at
-$|E|{=}\Theta(n\log n)$ across $n\in\{50,100,200,500\}$, and this
-ordering persists on a trained $n{=}100$ checkpoint. On PettingZoo MPE
-simple-spread at $n{=}10$ (discrete actions, categorical policies, TVD
-distance), a three-seed panel shows that sparse Graph-SND estimators
-track full SND with max absolute bias $2.92{\times}10^{-3}$ while
-reducing wall-clock metric cost by $1.97$--$4.87\times$ depending on edge
-budget. On VMAS Dispersion at $n{=}10$, substituting a $k{=}3$ $k$-NN graph,
-Bernoulli-$0.1$ random subgraph, or random $d$-regular expander
-Graph-SND ($d{=}\lceil\log_2 n\rceil$) for full SND inside the DiCo
-diversity controller matches the $\SND_{\mathrm{des}}{=}0.1$ set
-point to within ${\approx}2\%$ relative error (typically within
-$10^{-3}$ for $k$-NN and Bernoulli-$0.1$) and matches full-$\SND$
-reward within seed variance; a paired three-seed, three-set-point head-to-head at
-$n{=}50$ trains both Bernoulli-$0.1$ Graph-SND and full SND as the
-DiCo estimator and finds statistically indistinguishable reward and
-tracking (sub-$1\%$ relative error for both) at a measured
-${\sim}9.5{\times}$ cheaper per-call metric cost for
-Bernoulli-$0.1$.
+$\Theta(n\log n)$ edges across $n\in\{50,100,200,500\}$, and this
+near-unit behavior persists on a trained $n=100$ checkpoint. In DiCo diversity control,
+replacing full SND with sparse Graph-SND preserves reward and set-point
+tracking within observed seed variation while reducing per-call metric
+cost by ${\sim}9.5\times$ at $n=50$. A PettingZoo MPE panel with
+categorical policies and total-variation distance confirms that the
+graph aggregation is not tied to Gaussian policies or Wasserstein
+distances.
 \end{abstract}
 % ============================================================
 \section{Introduction}
