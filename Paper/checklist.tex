@@ -37,17 +37,19 @@
     Theorem~\ref{thm:concentration}, and Theorem~\ref{thm:distortion})
     are proved in full in Appendix~\ref{app:proofs}.
     Propositions~\ref{prop:recovery}--\ref{prop:unbiased} and
-    Theorem~\ref{thm:concentration} are stated with their assumptions in
-    Sections~\ref{sec:method}--\ref{sec:theory}; Theorem~\ref{thm:distortion}
-    is stated in Appendix~\ref{app:proofs} with a compact summary in
-    Section~\ref{sec:theory}. Assumptions (e.g.,
+    Theorem~\ref{thm:concentration}, and Theorem~\ref{thm:distortion}
+    are stated with their assumptions in
+    Sections~\ref{sec:method}--\ref{sec:theory}; the spectral
+    sharpening of Proposition~\ref{prop:spectral-nuclear-discrepancy}
+    is stated and proved in Appendix~\ref{app:proofs} with a compact
+    summary in Section~\ref{sec:theory}. Assumptions (e.g.,
     non-negative edge weights with $W(G)>0$, bounded distances
     $d(i,j)\in[0,D_{\max}]$, independent Bernoulli inclusion under
     Horvitz--Thompson weights) are stated inside the corresponding
     theorem statements and reused verbatim in the proofs.
 
 \item {\bf Experimental result reproducibility}
-    \item[] Question: Does the paper fully disclose all the information needed to reproduce the main experimental results of the paper?
+    \item[] Question: Does the paper fully disclose all the information needed to reproduce the main experimental results of the paper to the extent that it affects the main claims and/or conclusions of the paper (regardless of whether the code and data are provided or not)?
     \item[] Answer: \answerYes{}
     \item[] Justification: Section~\ref{sec:experiments}
     summarizes the VMAS environment, team sizes, policy architecture,
@@ -101,7 +103,7 @@
     the supplementary material contains an anonymised snapshot.
 
 \item {\bf Experimental setting/details}
-    \item[] Question: Does the paper specify all the training and test details necessary to understand the results?
+    \item[] Question: Does the paper specify all the training and test details (e.g., data splits, hyperparameters, how they were chosen, type of optimizer) necessary to understand the results?
     \item[] Answer: \answerYes{}
     \item[] Justification: Training details (optimiser, learning
     rate, clip parameter, GAE $\lambda$, discount $\gamma$, rollout
@@ -149,7 +151,7 @@
     released alongside the LaTeX fragment.
 
 \item {\bf Experiments compute resources}
-    \item[] Question: For each experiment, does the paper provide sufficient information on the computer resources needed to reproduce the experiments?
+    \item[] Question: For each experiment, does the paper provide sufficient information on the computer resources (type of compute workers, memory, time of execution) needed to reproduce the experiments?
     \item[] Answer: \answerYes{}
     \item[] Justification: The $n{\in}\{4,8,16\}$ frozen-checkpoint
     verifications (Section~\ref{sec:experiments},
@@ -177,7 +179,7 @@
     (three CPU seeds at $n{=}10$ plus measurement passes).
 
 \item {\bf Code of ethics}
-    \item[] Question: Does the research conducted in the paper conform, in every respect, with the NeurIPS Code of Ethics?
+    \item[] Question: Does the research conducted in the paper conform, in every respect, with the NeurIPS Code of Ethics \url{https://neurips.cc/public/EthicsGuidelines}?
     \item[] Answer: \answerYes{}
     \item[] Justification: The work is theoretical and empirical
     research on a metric for behavioural diversity in cooperative
@@ -196,14 +198,14 @@
     to positive or negative societal impact.
 
 \item {\bf Safeguards}
-    \item[] Question: Does the paper describe safeguards that have been put in place for responsible release of data or models that have a high risk for misuse?
+    \item[] Question: Does the paper describe safeguards that have been put in place for responsible release of data or models that have a high risk for misuse (e.g., pre-trained language models, image generators, or scraped datasets)?
     \item[] Answer: \answerNA{}
     \item[] Justification: No data or models with misuse potential
     are released; the released artefacts are experimental code,
     reproducible CSV/JSON result files, and paper figures.
 
 \item {\bf Licenses for existing assets}
-    \item[] Question: Are the creators or original owners of assets used in the paper properly credited and are the license and terms of use explicitly mentioned and properly respected?
+    \item[] Question: Are the creators or original owners of assets (e.g., code, data, models), used in the paper, properly credited and are the license and terms of use explicitly mentioned and properly respected?
     \item[] Answer: \answerYes{}
     \item[] Justification: VMAS \citep{bettini2022vmas} and DiCo
     \citep{bettini2024dico} are credited in the main text and
@@ -227,18 +229,18 @@
     each asset reproduces.
 
 \item {\bf Crowdsourcing and research with human subjects}
-    \item[] Question: For crowdsourcing experiments and research with human subjects, does the paper include the full text of instructions given to participants and screenshots, if applicable, as well as details about compensation?
+    \item[] Question: For crowdsourcing experiments and research with human subjects, does the paper include the full text of instructions given to participants and screenshots, if applicable, as well as details about compensation (if any)? 
     \item[] Answer: \answerNA{}
     \item[] Justification: No crowdsourcing or human-subjects
     research is involved.
 
 \item {\bf Institutional review board (IRB) approvals or equivalent for research with human subjects}
-    \item[] Question: Does the paper describe potential risks incurred by study participants, whether such risks were disclosed to the subjects, and whether IRB approvals (or equivalent) were obtained?
+    \item[] Question: Does the paper describe potential risks incurred by study participants, whether such risks were disclosed to the subjects, and whether Institutional Review Board (IRB) approvals (or an equivalent approval/review based on the requirements of your country or institution) were obtained?
     \item[] Answer: \answerNA{}
     \item[] Justification: No human-subjects research is involved.
 
 \item {\bf Declaration of LLM usage}
-    \item[] Question: Does the paper describe the usage of LLMs if it is an important, original, or non-standard component of the core methods in this research?
+    \item[] Question: Does the paper describe the usage of LLMs if it is an important, original, or non-standard component of the core methods in this research? Note that if the LLM is used only for writing, editing, or formatting purposes and does \emph{not} impact the core methodology, scientific rigor, or originality of the research, declaration is not required.
     \item[] Answer: \answerNA{}
     \item[] Justification: No LLM is part of the methods, theory,
     or experimental pipeline of this paper. LLMs were used only as
