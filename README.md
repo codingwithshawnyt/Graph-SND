@@ -1,11 +1,11 @@
-# Graph-SND: Scalable System Neural Diversity
+# Graph-SND: Sparse Aggregation for Behavioral Diversity in Multi-Agent Reinforcement Learning
 
 Graph-based local aggregation and sampling-based estimation of the
 System Neural Diversity (SND) metric for multi-agent reinforcement
 learning. Companion code and experimental pipeline for the paper
-**Scalable System Neural Diversity: Graph-Based Local Aggregation and
-Sampling-Based Estimation**, which extends the original *System
-Neural Diversity* metric (Bettini, Shankar, Prorok; JMLR 2025).
+**Graph-SND: Sparse Aggregation for Behavioral Diversity in Multi-Agent
+Reinforcement Learning**, which extends the original *System Neural
+Diversity* metric (Bettini, Shankar, Prorok; JMLR 2025).
 
 ## Overview
 
