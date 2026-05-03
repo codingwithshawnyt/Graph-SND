@@ -49,14 +49,15 @@
 \item {\bf Experimental result reproducibility}
     \item[] Question: Does the paper fully disclose all the information needed to reproduce the main experimental results of the paper?
     \item[] Answer: \answerYes{}
-    \item[] Justification: Section~\ref{sec:experiments:setup}
-    specifies the VMAS environment, team sizes, policy architecture,
-    training algorithm (IPPO), checkpoints (iter~0, iter~100), rollout
+    \item[] Justification: Section~\ref{sec:experiments}
+    summarizes the VMAS environment, team sizes, policy architecture,
+    training algorithm (IPPO), checkpoints, rollout
     set size, and metric implementation. Appendix~\ref{app:hyperparams}
     lists every PPO hyperparameter and the $n{=}100$ scaling overrides.
     The frozen-init GPU timing sweep and the DiCo integration
-    (Sections~\ref{sec:experiments:timing},
-    \ref{sec:experiments:dico-dispersion}) specify batch
+    (Section~\ref{sec:experiments:scaling},
+    Appendix~\ref{app:verify}, and Section~\ref{sec:experiments:dico-dispersion})
+    specify batch
     shape, timing regime (\texttt{torch.cuda.synchronize} on both
     sides of every \texttt{perf\_counter}), number of trials, number
     of seeds, and configuration of the $k$-NN graph and the Bernoulli
@@ -124,15 +125,15 @@
     \item[] Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments?
     \item[] Answer: \answerYes{}
     \item[] Justification: The unbiasedness diagnostic
-    (Section~\ref{sec:experiments:verify}, Appendix~\ref{app:verify})
+    (Section~\ref{sec:experiments}, Appendix~\ref{app:verify})
     reports $95\%$ confidence intervals from $2{,}000$ Bernoulli draws
     per $p$ and the standardised deviation
     $|\mathrm{bias}|/\mathrm{SE}$ as a sharper test. The concentration
     diagnostic reports the empirical violation rate at $\delta{=}0.1$
     over $2{,}000$ draws per cell and the $95$th-percentile deviation.
     The timing experiments
-    (Section~\ref{sec:experiments:timing},
-    \ref{sec:experiments:scaling}) report mean, median, and standard
+    (Section~\ref{sec:experiments:scaling},
+    Appendix~\ref{app:verify}) report mean, median, and standard
     deviation over $20$ timing trials per cell after $3$ warm-ups.
     The DiCo experiment (Section~\ref{sec:experiments:dico-dispersion})
     reports mean $\pm$ standard deviation over three seeds for reward
@@ -151,12 +152,13 @@
     \item[] Question: For each experiment, does the paper provide sufficient information on the computer resources needed to reproduce the experiments?
     \item[] Answer: \answerYes{}
     \item[] Justification: The $n{\in}\{4,8,16\}$ frozen-checkpoint
-    verifications (Section~\ref{sec:experiments:verify},
+    verifications (Section~\ref{sec:experiments},
     Appendix~\ref{app:verify}) run on a single CPU core with the
     reported $20$ trials per cell in minutes. The $n{=}100$ overnight
     PPO run (Section~\ref{sec:experiments:scaling}) fits on one
     RTX~4090, as does the frozen-init $n\in\{100,250,500\}$ GPU timing
-    sweep (Section~\ref{sec:experiments:timing}). The DiCo
+    sweep (Section~\ref{sec:experiments:scaling},
+    Appendix~\ref{app:verify}). The DiCo
     closed-loop experiment
     (Section~\ref{sec:experiments:dico-dispersion}) also
     runs on one RTX~4090 at the reported $167$-iteration budget.
