@@ -110,13 +110,16 @@ def plot_unbiasedness(df: pd.DataFrame, out_path: Path) -> None:
             ax.annotate(
                 f"bias/se = {b:+.2f}",
                 xy=(xi, m),
-                xytext=(6, 6),
+                xytext=(8, 8),
                 textcoords="offset points",
                 fontsize=8,
+                bbox=dict(facecolor="white", edgecolor="none",
+                          alpha=0.8, pad=1.5),
             )
+        ax.set_xlim(0.02, 0.85)
         ax.set_xlabel("inclusion probability $p$")
         ax.set_ylabel(r"$\hat{\mathrm{SND}}_{\mathrm{HT}}$")
-        ax.set_title(f"Prop. 7: HT unbiasedness (n=8, {tag})")
+        ax.set_title(f"Prop. 8: HT unbiasedness (n=8, {tag})")
         ax.legend(loc="best")
 
     _save(fig, out_path)
