@@ -13,7 +13,8 @@ The experiment measures:
    edge counts.
 2. Spectral properties (lambda_2, spectral gap, Ramanujan bound check).
 3. Edge forwarding index pi(G) to validate the theorem's mechanism.
-4. Wall-clock timing for full SND vs graph SND.
+4. Nuclear-norm diagnostics for the spectral discrepancy bound.
+5. Wall-clock timing for full SND vs graph SND.
 
 Near-zero SND guard: configurations with SND < SND_FLOOR are skipped
 and both the ratio and absolute distortion are reported.
@@ -97,6 +98,41 @@ def _clamp_d(n: int, d: int) -> int:
     if (n * d) % 2 != 0:
         d -= 1
     return max(1, d)
+
+
+def distance_matrix_diagnostics(D: Tensor, snd_val: Tensor) -> Dict[str, float]:
+    """Nuclear-norm diagnostics for the spectral discrepancy bound."""
+    D_cpu = D.detach().to(device="cpu", dtype=torch.float64)
+    svals = torch.linalg.svdvals(D_cpu)
+    nuclear_norm = float(svals.sum().item())
+    op_norm = float(svals.max().item()) if svals.numel() else 0.0
+    fro_norm = float(torch.linalg.norm(D_cpu, ord="fro").item())
+    dmax_entry = float(D_cpu.max().item()) if D_cpu.numel() else 0.0
+    snd_val_f = float(snd_val.item())
+    n = int(D_cpu.shape[0])
+
+    if snd_val_f > SND_FLOOR:
+        nuclear_over_n_snd = nuclear_norm / (n * snd_val_f)
+    else:
+        nuclear_over_n_snd = float("nan")
+    if dmax_entry > 0:
+        nuclear_over_n_dmax = nuclear_norm / (n * dmax_entry)
+    else:
+        nuclear_over_n_dmax = float("nan")
+    if op_norm > 0:
+        stable_rank = (fro_norm * fro_norm) / (op_norm * op_norm)
+    else:
+        stable_rank = float("nan")
+
+    return {
+        "D_nuclear_norm": nuclear_norm,
+        "D_op_norm": op_norm,
+        "D_fro_norm": fro_norm,
+        "D_max_entry": dmax_entry,
+        "D_nuclear_over_n_snd": nuclear_over_n_snd,
+        "D_nuclear_over_n_dmax": nuclear_over_n_dmax,
+        "D_stable_rank": stable_rank,
+    }
 
 
 def forwarding_index(n: int, edges: Tensor) -> float:
@@ -311,6 +347,7 @@ def run_single_config(
     cfg: ExpConfig,
     timing_trials: int,
     data_source: str,
+    d_diagnostics: Dict[str, float],
 ) -> Optional[dict]:
     n_pairs = n * (n - 1) // 2
     target_edges = n * d // 2
@@ -341,7 +378,7 @@ def run_single_config(
     if num_edges == 0:
         return None
 
-    lam2, gap, d_max, is_ram = spectral_gap(n, edges)
+    lam2, gap, degree_max, is_ram = spectral_gap(n, edges)
 
     snd_g_u = graph_snd(D, edges)
     snd_val_f = float(snd_val.item())
@@ -369,9 +406,15 @@ def run_single_config(
     full_mean = float(np.mean(ftimes)) * 1e3
     graph_mean = float(np.mean(gtimes)) * 1e3
 
-    ramanujan_bound = 2.0 * math.sqrt(max(d_max - 1, 0))
+    ramanujan_bound = 2.0 * math.sqrt(max(degree_max - 1, 0))
+    spectral_rel_bound = float("nan")
+    spectral_abs_bound = float("nan")
+    rho_snd = d_diagnostics.get("D_nuclear_over_n_snd", float("nan"))
+    if graph_family == "random_regular" and snd_val_f >= SND_FLOOR and math.isfinite(rho_snd):
+        spectral_rel_bound = ((lam2 + degree_max / (n - 1)) / degree_max) * rho_snd
+        spectral_abs_bound = spectral_rel_bound * snd_val_f
 
-    return {
+    row = {
         "n": n,
         "d": d,
         "graph_family": graph_family,
@@ -389,13 +432,17 @@ def run_single_config(
         "upper_bound": upper_bound,
         "lambda_2": lam2,
         "spectral_gap": gap,
-        "d_max": d_max,
+        "d_max": degree_max,
         "is_ramanujan": bool(is_ram),
         "ramanujan_bound": ramanujan_bound,
+        "spectral_abs_bound": spectral_abs_bound,
+        "spectral_rel_bound": spectral_rel_bound,
         "time_full_ms": full_mean,
         "time_graph_ms": graph_mean,
         "data_source": data_source,
     }
+    row.update(d_diagnostics)
+    return row
 
 
 def run_for_n(
@@ -440,9 +487,11 @@ def _run_on_rollouts(
     print(f"[n={n_agents}::{data_source}] computing full D and SND...")
     D = pairwise_behavioral_distance(means, stds)
     snd_val = snd(D)
+    d_diagnostics = distance_matrix_diagnostics(D, snd_val)
     print(
         f"[n={n_agents}::{data_source}] SND={snd_val.item():.6f} "
-        f"n_pairs={n_agents*(n_agents-1)//2}"
+        f"n_pairs={n_agents*(n_agents-1)//2} "
+        f"rho_*={d_diagnostics['D_nuclear_over_n_snd']:.3f}"
     )
 
     if cfg.warmup_trials > 0:
@@ -476,6 +525,7 @@ def _run_on_rollouts(
                     cfg=cfg,
                     timing_trials=cfg.timing_trials,
                     data_source=data_source,
+                    d_diagnostics=d_diagnostics,
                 )
                 if result is not None:
                     rows.append(result)
@@ -604,10 +654,23 @@ def main() -> None:
         n_info = {"n": int(n)}
         for src, src_grp in grp.groupby("data_source"):
             rr = src_grp[src_grp["graph_family"] == "random_regular"]
+            if len(src_grp) > 0:
+                n_info[f"{src}_D_nuclear_over_n_snd"] = float(
+                    src_grp["D_nuclear_over_n_snd"].iloc[0]
+                )
+                n_info[f"{src}_D_nuclear_over_n_dmax"] = float(
+                    src_grp["D_nuclear_over_n_dmax"].iloc[0]
+                )
+                n_info[f"{src}_D_stable_rank"] = float(
+                    src_grp["D_stable_rank"].iloc[0]
+                )
             if len(rr) > 0:
                 n_info[f"{src}_expander_ratio_mean"] = float(rr["ratio"].mean())
                 n_info[f"{src}_expander_ratio_recip_mean"] = float(
                     rr["ratio_reciprocal"].mean()
+                )
+                n_info[f"{src}_expander_spectral_rel_bound_mean"] = float(
+                    rr["spectral_rel_bound"].mean()
                 )
         summary["per_n_summary"].append(n_info)
     summary_path.write_text(json.dumps(summary, indent=2))

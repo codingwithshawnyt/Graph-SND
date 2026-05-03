@@ -96,9 +96,9 @@ SND exactly; fixed graphs define localized diversity measures at
 $O(|E|)$ cost; and random edge samples yield either an unconditionally
 unbiased Horvitz--Thompson estimator or a normalized sample mean with
 finite-population $O(1/\sqrt{m})$ concentration conditional on the
-sampled edge count. For fixed sparse graphs, we prove a distortion bound
-controlled by the edge forwarding index, giving $O(\log n)$ worst-case
-distortion for expanders with $\Theta(n\log n)$ edges. Experiments on
+sampled edge count. For fixed sparse graphs, we prove forwarding-index
+worst-case distortion bounds for expanders and a sharper spectral
+discrepancy bound under nuclear-norm control of the distance matrix. Experiments on
 VMAS and PettingZoo verify recovery, unbiasedness, concentration, and
 wall-clock scaling. In a 500-iteration $n=100$ PPO run,
 Bernoulli-$0.1$ Graph-SND tracks full SND while reducing metric time by
@@ -181,7 +181,8 @@ recovery on $K_n$, non-negativity, graph-automorphism invariance,
 $O(|E|)$ complexity, Horvitz--Thompson unbiasedness and Hoeffding-type
 concentration for random $G$, and a deterministic distortion bound
 for fixed $G$ via the edge forwarding
-index~\citep{heydemann1989forwarding,leighton1999multicommodity}. (iii) Experiments on VMAS
+index~\citep{heydemann1989forwarding,leighton1999multicommodity}, with
+a spectral nuclear-norm refinement for $d$-regular graphs. (iii) Experiments on VMAS
 \citep{bettini2022vmas} verifying numerical recovery on $K_n$,
 estimator concentration at the predicted rate, wall-clock speedup
 matching the structural $1/p$ prediction across
@@ -572,6 +573,11 @@ $|E|/|\Pairs|$ and $|E|\pi(G)/|\Pairs|$, with $\pi(G)$ the edge
 forwarding index~\citep{heydemann1989forwarding}; on $d$-regular
 expanders this gives ratio $\mathcal{O}(\log n)$ at $\Theta(n\log n)$
 edges~\citep{leighton1999multicommodity}.
+Proposition~\ref{prop:spectral-nuclear-discrepancy} gives a
+complementary spectral discrepancy bound: for $d$-regular $G$, the
+relative error is controlled by graph expansion times
+$\|\mathbf{D}\|_*/(n\,\SND(\mathbf{D}))$, a directly measurable
+effective-rank diagnostic of the distance matrix.
 Both Theorems~\ref{thm:concentration} and~\ref{thm:distortion} depend
 only on boundedness (and for Theorem~\ref{thm:distortion}, triangle
 inequality) of the pairwise dissimilarity $d(i,j)$, not on the
@@ -977,11 +983,12 @@ $[0.9987,1.0013]$ range but preserves the same qualitative ordering and
 near-unit behavior.
 
 In summary: \emph{the worst-case $\mathcal{O}(\log n)$ bound is
-structurally correct but conservative in practice; on near-Ramanujan
-graphs the distortion is $\mathcal{O}(1)$ at
-$|E|{=}\Theta(n\log n)$, consistent with the spectral-mixing mechanism
-of Remark~\ref{rem:spectral-sharpening}, delivering a deterministic
-near-linear-cost approximation of an $\mathcal{O}(n^2)$ metric}.
+structurally correct but conservative in practice; the near-unit
+expander ratios are consistent with the spectral discrepancy bound of
+Proposition~\ref{prop:spectral-nuclear-discrepancy} when the distance
+matrix has small normalized nuclear norm, while a fully tight
+probabilistic explanation of the observed $0.1\%$-level distortion
+remains open}.
 
 \paragraph{Discrete-action transfer on PettingZoo MPE (categorical + TVD).}
 To address environment and policy-family scope directly, we run a
@@ -1060,7 +1067,7 @@ Goal & Graph choice & Theorem support & When to use & Cost profile \\
 \midrule
 Estimation of full $\SND$ & Bernoulli-$p$ random graph & Prop.~\ref{prop:unbiased}, Thm.~\ref{thm:concentration} & HT-unbiased estimate or normalized sample mean of global pairwise diversity & $\E[|E|]=p\binom{n}{2}$; speedup tracks $\approx1/p$ \\
 Modeling local semantics & Structured fixed graph ($k$-NN, communication topology) & Prop.~\ref{prop:nonneg}, Remark~\ref{rem:semantics} & Only task-relevant interactions should contribute to diversity & $|E|$ set by structure; interpretable local signal \\
-Deterministic sparse approximation & Random $d$-regular expander ($d=\Theta(\log n)$) & Thm.~\ref{thm:distortion}, Cor.~\ref{cor:expander-distortion} & Deterministic fixed-$G$ approximation with strong worst-case structure & $|E|=\Theta(n\log n)$; ratio in $[0.9987,1.0013]$ and $2$--$39\times$ lower $\pi(G)$ vs matched-edge baselines \\
+Deterministic sparse approximation & Random $d$-regular expander ($d=\Theta(\log n)$) & Thm.~\ref{thm:distortion}, Cor.~\ref{cor:expander-distortion}, Prop.~\ref{prop:spectral-nuclear-discrepancy} & Deterministic fixed-$G$ approximation with strong worst-case structure and data-dependent spectral control & $|E|=\Theta(n\log n)$; ratio in $[0.9987,1.0013]$ and $2$--$39\times$ lower $\pi(G)$ vs matched-edge baselines \\
 \bottomrule
 \end{tabular}
 }
@@ -1086,11 +1093,11 @@ and other DiCo configurations remains out of scope here.
 Theorem~\ref{thm:distortion} bounds worst-case distortion for arbitrary
 fixed $G$, and the expander ablation of
 Section~\ref{sec:experiments:expander} confirms the mechanism
-empirically; the observed $\mathcal{O}(1)$ distortion is consistent
-with the spectral-mixing argument of Remark~\ref{rem:spectral-sharpening}
-under bounded effective rank of $\mathbf{D}$, but a fully unconditional
-distribution-dependent sharpening of the worst-case $\mathcal{O}(\log n)$
-bound remains open.
+empirically; Proposition~\ref{prop:spectral-nuclear-discrepancy}
+sharpens the expander bound under the explicit, measurable condition
+that $\|\mathbf{D}\|_*/(n\,\SND(\mathbf{D}))$ is controlled, but a fully
+unconditional distribution-dependent explanation of the observed
+near-unit ratios remains open.
 \emph{(4) Non-Gaussian scope is still narrow:} we now include one
 non-Gaussian, non-VMAS transfer panel (PettingZoo MPE simple-spread,
 categorical policies, TVD distance, $n{=}10$), but broader
@@ -1108,7 +1115,7 @@ policies at larger scales and tasks} by substituting a closed-form or
 approximate $d$ beyond the $n{=}10$ MPE/TVD panel;
 (iii) \emph{unconditional distribution-dependent tightenings} of
 Theorem~\ref{thm:distortion} beyond the conditional spectral bound of
-Remark~\ref{rem:spectral-sharpening}; and (iv) a broader DiCo$+\SNDG$ study, over larger $n$, tasks,
+Proposition~\ref{prop:spectral-nuclear-discrepancy}; and (iv) a broader DiCo$+\SNDG$ study, over larger $n$, tasks,
 set-points, and the interaction of sampling noise in
 $\SNDG^{\mathrm{u}}(G_p)$ with DiCo's set-point regulation.
 \section{Conclusion}
@@ -1355,29 +1362,96 @@ $\mathcal{O}(\log n)$, a $\Theta(n/\log n)$-factor reduction against
 full $\SND$.
 \end{corollary}
 
-\begin{remark}[Empirical sharpening via spectral mixing]
+\begin{proposition}[Spectral discrepancy under nuclear-norm control]
+\label{prop:spectral-nuclear-discrepancy}
+Let $G$ be a simple $d$-regular graph on $n$ vertices with adjacency
+matrix $A$ and
+$\lambda_2:=\max\{|\lambda_i(A)|: i\geq 2\}$, where
+$d=\lambda_1(A)$ is the trivial eigenvalue. Let
+$\mathbf{D}\in\R^{n\times n}$ be symmetric with zero diagonal. Then
+\begin{equation}
+\label{eq:spectral-nuclear-absolute}
+\abs{\SNDG^{\mathrm{u}}(\mathbf{D},G)-\SND(\mathbf{D})}
+\leq
+\frac{\lambda_2+d/(n-1)}{n\,d}\,\|\mathbf{D}\|_* ,
+\end{equation}
+where $\|\cdot\|_*$ denotes the nuclear norm. If $\SND(\mathbf{D})>0$
+and
+\[
+\rho_*(\mathbf{D})
+:=
+\frac{\|\mathbf{D}\|_*}{n\,\SND(\mathbf{D})},
+\]
+then
+\begin{equation}
+\label{eq:spectral-nuclear-relative}
+\abs{\frac{\SNDG^{\mathrm{u}}(\mathbf{D},G)}{\SND(\mathbf{D})}-1}
+\leq
+\frac{\lambda_2+d/(n-1)}{d}\,\rho_*(\mathbf{D}).
+\end{equation}
+In particular, if $G$ is Ramanujan
+($\lambda_2\leq 2\sqrt{d-1}$) and $\rho_*(\mathbf{D})\leq C$, then the
+relative error is at most
+$C(2\sqrt{d-1}+d/(n-1))/d=\mathcal{O}(C/\sqrt d)$; at
+$d=\Theta(\log n)$ this is
+$\mathcal{O}(C/\sqrt{\log n})$.
+\end{proposition}
+
+\begin{remark}[What the spectral bound explains]
 \label{rem:spectral-sharpening}
 Section~\ref{sec:experiments:expander} measures
 $\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ on random $d$-regular
-graphs at $d{=}\Theta(\log n)$---three orders of magnitude tighter than
-the worst-case $\mathcal{O}(\log n)$ ratio of
-Corollary~\ref{cor:expander-distortion}. A spectral-mixing analysis
-suggests this tightening should hold whenever the pairwise dissimilarity
-matrix $\mathbf{D}$ has bounded effective rank
-($\|\mathbf{D}\|_* = \mathcal{O}(n\,D_{\max})$, where $\|\cdot\|_*$
-denotes the nuclear norm): writing
-$W = A/|E| - (J-I)/|\Pairs|$ for the weight-deviation operator, the
-operator-norm--nuclear-norm duality gives
-$|\SNDG^{\mathrm{u}} - \SND| \leq \|W\|_{\mathrm{op}}\,\|\mathbf{D}\|_*
-= \mathcal{O}(\lambda_2\,D_{\max}/d)$, which for Ramanujan graphs
-($\lambda_2 \leq 2\sqrt{d{-}1}$) yields
-$\mathcal{O}(D_{\max}/\sqrt{d})$. Pairwise Wasserstein and TVD matrices
-arising from policy distributions are typically of low effective rank,
-consistent with the observed near-unit ratio. Proving this
-distribution-dependent sharpening unconditionally---or replacing the
-rank assumption with an explicit moment or sub-Gaussianity condition on
-$\mathbf{D}$---is an open problem.
+graphs at $d{=}\Theta(\log n)$, far tighter than the worst-case
+$\mathcal{O}(\log n)$ ratio of
+Corollary~\ref{cor:expander-distortion}.
+Proposition~\ref{prop:spectral-nuclear-discrepancy} formalizes a
+distribution-dependent explanation: if the realized pairwise
+dissimilarity matrix has controlled normalized nuclear norm
+$\rho_*(\mathbf{D})$, then spectral expansion improves the deterministic
+bound from logarithmic distortion to a decreasing
+$\mathcal{O}(\rho_*(\mathbf{D})/\sqrt{\log n})$ relative-error bound at
+$d=\Theta(\log n)$. This is still a fixed-$G$, worst-case alignment
+bound over matrices satisfying the nuclear-norm condition; it does not
+fully explain the much smaller empirical ratios, which likely also use
+random-graph variance reduction and the specific distributional
+structure of MARL distance matrices. A fully unconditional or
+probabilistic sharpening remains open.
 \end{remark}
+
+\paragraph{Proof of Proposition~\ref{prop:spectral-nuclear-discrepancy}.}
+Let $J=\mathbf{1}\mathbf{1}^{\top}$ and define the discrepancy matrix
+\[
+M_G:=A-\frac{d}{n-1}(J-I).
+\]
+For the all-ones vector, $A\mathbf{1}=d\mathbf{1}$ and
+$(J-I)\mathbf{1}=(n-1)\mathbf{1}$, so $M_G\mathbf{1}=0$.
+For any eigenvector $v\perp\mathbf{1}$ of $A$ with
+$Av=\lambda v$, we have $Jv=0$ and $(J-I)v=-v$, hence
+\[
+M_G v=\left(\lambda+\frac{d}{n-1}\right)v.
+\]
+Therefore
+\[
+\|M_G\|_{\mathrm{op}}
+\leq
+\lambda_2+\frac{d}{n-1}.
+\]
+Using $D_{ii}=0$, $|E|=nd/2$, and
+$|\Pairs|=n(n-1)/2$,
+\[
+\langle M_G,\mathbf{D}\rangle_F
+=
+2|E|\,\SNDG^{\mathrm{u}}(\mathbf{D},G)
+-\frac{d}{n-1}\,2|\Pairs|\,\SND(\mathbf{D})
+=
+nd\bigl(\SNDG^{\mathrm{u}}(\mathbf{D},G)-\SND(\mathbf{D})\bigr).
+\]
+Operator-norm/nuclear-norm duality gives
+$|\langle M_G,\mathbf{D}\rangle_F|
+\leq \|M_G\|_{\mathrm{op}}\|\mathbf{D}\|_*$, proving
+\eqref{eq:spectral-nuclear-absolute}. Dividing by $\SND(\mathbf{D})$
+proves \eqref{eq:spectral-nuclear-relative}; the Ramanujan specialization
+substitutes $\lambda_2\leq2\sqrt{d-1}$.
 
 \paragraph{Proof of Theorem~\ref{thm:distortion}.}
 
