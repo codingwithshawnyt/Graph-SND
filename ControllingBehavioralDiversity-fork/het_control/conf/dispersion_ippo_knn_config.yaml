@@ -30,6 +30,12 @@ model:
   diversity_knn_k: 3
 
 graph_snd_log_path: ${hydra:runtime.output_dir}/graph_snd_log.csv
+# Optional validation diagnostic. When interval > 0, GraphSNDLoggingCallback
+# recomputes complete-graph SND on the scaled actions that the environment sees.
+# Subsample caps observations only; every retained observation still uses all
+# C(n,2) agent pairs.
+graph_snd_posthoc_full_snd_interval: 0
+graph_snd_posthoc_full_snd_subsample: 4096
 
 experiment:
   render: false

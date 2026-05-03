@@ -86,6 +86,12 @@ def get_experiment(cfg: DictConfig) -> Experiment:
                 n_agents=n_agents,
                 estimator=str(cfg.model.diversity_estimator),
                 p=float("nan") if str(cfg.model.diversity_estimator) == "expander" else float(cfg.model.diversity_p),
+                posthoc_full_snd_interval=int(
+                    cfg.get("graph_snd_posthoc_full_snd_interval", 0) or 0
+                ),
+                posthoc_full_snd_subsample=int(
+                    cfg.get("graph_snd_posthoc_full_snd_subsample", 4096) or 0
+                ),
             )
         )
 

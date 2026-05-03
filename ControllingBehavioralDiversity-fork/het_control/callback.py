@@ -193,7 +193,12 @@ class GraphSNDLoggingCallback(Callback):
 
     Writes one row per PPO iteration with columns
     ``iter, seed, n_agents, estimator, p, snd_t, snd_des, reward_mean,
-    metric_time_ms, scaling_ratio_mean, applied_snd, out_loc_norm_mean``
+    metric_time_ms, scaling_ratio_mean, applied_snd, out_loc_norm_mean``.
+    When requested, it also logs a post-hoc full-pair SND measurement of
+    the scaled actions that the environment sees. This is useful for
+    sparse-controller validation: it distinguishes "the sparse feedback
+    tracked its own target" from "the resulting policies also have the
+    intended full-SND diversity."
 
     ``scaling_ratio_mean`` / ``out_loc_norm_mean`` are taken from
     :class:`~het_control.models.het_control_mlp_empirical.HetControlMlpEmpirical`
@@ -249,6 +254,15 @@ class GraphSNDLoggingCallback(Callback):
         "scaling_ratio_mean",
         "applied_snd",
         "out_loc_norm_mean",
+        # Optional post-hoc validation columns. These are NaN unless
+        # graph_snd_posthoc_full_snd_interval > 0. The value is computed
+        # on scaled policy outputs with the complete K_n pair set, i.e. it
+        # measures actual full-SND diversity of the actions sent to the
+        # environment rather than the sparse estimator used by the DiCo
+        # controller.
+        "posthoc_full_snd",
+        "posthoc_full_snd_time_ms",
+        "posthoc_full_snd_n_obs",
         # End-to-end per-iter wall-clock measured between
         # on_batch_collected and on_train_end (ms). Captures rollout
         # collection + PPO epochs + Graph-SND estimator cost in a single
@@ -266,6 +280,8 @@ class GraphSNDLoggingCallback(Callback):
         n_agents: int,
         estimator: str,
         p: float,
+        posthoc_full_snd_interval: int = 0,
+        posthoc_full_snd_subsample: int = 4096,
     ) -> None:
         super().__init__()
         self.log_path = Path(log_path)
@@ -273,10 +289,15 @@ class GraphSNDLoggingCallback(Callback):
         self.n_agents = int(n_agents)
         self.estimator = str(estimator)
         self.p = float(p)
+        self.posthoc_full_snd_interval = max(0, int(posthoc_full_snd_interval))
+        self.posthoc_full_snd_subsample = int(posthoc_full_snd_subsample)
 
         self._csv_fh = None
         self._csv_writer: Optional[csv.DictWriter] = None
         self._current_reward_mean: float = float("nan")
+        self._current_posthoc_full_snd: float = float("nan")
+        self._current_posthoc_full_snd_time_ms: float = float("nan")
+        self._current_posthoc_full_snd_n_obs: int = 0
         self._current_iter: int = 0
         self._last_written_iter: int = -1
         self._iter_start_perf: Optional[float] = None
@@ -344,6 +365,18 @@ class GraphSNDLoggingCallback(Callback):
 
         # Stash reward mean for this iter; written at on_train_end time.
         self._current_reward_mean = self._batch_reward_mean(batch)
+        self._current_posthoc_full_snd = float("nan")
+        self._current_posthoc_full_snd_time_ms = float("nan")
+        self._current_posthoc_full_snd_n_obs = 0
+        if (
+            self.posthoc_full_snd_interval > 0
+            and self._current_iter % self.posthoc_full_snd_interval == 0
+        ):
+            (
+                self._current_posthoc_full_snd,
+                self._current_posthoc_full_snd_time_ms,
+                self._current_posthoc_full_snd_n_obs,
+            ) = self._compute_posthoc_full_snd(batch)
 
     def on_train_end(self, training_td: TensorDictBase, group: str) -> None:
         if self._current_iter == self._last_written_iter:
@@ -405,6 +438,9 @@ class GraphSNDLoggingCallback(Callback):
             "scaling_ratio_mean": scaling_ratio_mean,
             "applied_snd": applied_snd,
             "out_loc_norm_mean": out_loc_norm_mean,
+            "posthoc_full_snd": self._current_posthoc_full_snd,
+            "posthoc_full_snd_time_ms": self._current_posthoc_full_snd_time_ms,
+            "posthoc_full_snd_n_obs": self._current_posthoc_full_snd_n_obs,
             "iter_time_ms": iter_time_ms,
         }
         assert self._csv_writer is not None
@@ -445,6 +481,86 @@ class GraphSNDLoggingCallback(Callback):
             return float(sum(group_means) / len(group_means))
         except Exception:
             return float("nan")
+
+    @torch.no_grad()
+    def _compute_posthoc_full_snd(self, batch: TensorDictBase):
+        """Measure full SND of the scaled actions on the collected batch.
+
+        The online sparse controller may use Bernoulli or another sparse graph
+        to estimate the raw diversity signal. This diagnostic ignores that graph
+        and recomputes complete-graph SND on the scaled actions produced by the
+        current policy. A positive subsample cap samples observations, not agent
+        pairs: every retained observation still uses the full K_n pair set.
+        """
+        values: List[torch.Tensor] = []
+        n_obs_used = 0
+        sync_device: Optional[torch.device] = None
+        t0 = time.perf_counter()
+
+        try:
+            for group in self.experiment.group_map.keys():
+                if len(self.experiment.group_map[group]) <= 1:
+                    continue
+                policy = self.experiment.group_policies[group]
+                model = get_het_model(policy)
+                obs = _safe_tensordict_get(batch, (group, "observation"))
+                if obs is None:
+                    continue
+
+                obs = obs.detach()
+                if obs.is_cuda:
+                    sync_device = obs.device
+                obs_flat = obs.reshape(-1, obs.shape[-2], obs.shape[-1])
+                total_obs = int(obs_flat.shape[0])
+                cap = int(self.posthoc_full_snd_subsample)
+                if cap > 0 and total_obs > cap:
+                    # Deterministic, evenly-spaced subsample: no extra RNG state
+                    # and no pair sampling. This keeps the validation cost bounded
+                    # while preserving the complete pair set for each retained obs.
+                    idx = torch.linspace(
+                        0,
+                        total_obs - 1,
+                        steps=cap,
+                        device=obs_flat.device,
+                    ).round().long()
+                    obs_flat = obs_flat.index_select(0, idx)
+                n_obs_used = max(n_obs_used, int(obs_flat.shape[0]))
+
+                obs_td = TensorDict(
+                    {(group, "observation"): obs_flat},
+                    batch_size=obs_flat.shape[:-2],
+                    device=obs_flat.device,
+                )
+                agent_actions = []
+                for agent_i in range(model.n_agents):
+                    out_td = model._forward(
+                        obs_td,
+                        agent_index=agent_i,
+                        compute_estimate=False,
+                        update_estimate=False,
+                    )
+                    agent_actions.append(out_td.get(model.out_key))
+                values.append(
+                    compute_behavioral_distance(agent_actions, just_mean=True)
+                    .mean()
+                    .detach()
+                )
+        except Exception as exc:
+            _callback_logger.warning(
+                "GraphSNDLoggingCallback: posthoc full-SND diagnostic failed: %s",
+                exc,
+            )
+            return float("nan"), float("nan"), 0
+
+        if not values:
+            return float("nan"), float("nan"), 0
+
+        stacked = torch.stack([v.to(values[0].device) for v in values])
+        result = stacked.mean()
+        if sync_device is not None:
+            torch.cuda.synchronize(sync_device)
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        return float(result.item()), float(elapsed_ms), int(n_obs_used)
 
 
 def _safe_tensordict_get(td: TensorDictBase, key) -> Optional[torch.Tensor]:
