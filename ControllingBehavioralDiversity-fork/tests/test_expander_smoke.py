@@ -77,7 +77,7 @@ def test_expander_ratio_sanity():
     finite, positive, in (0, 2), and at least |E|/|Pairs| - 0.1.
 
     This is a smoke-test heuristic; the tight theoretical lower bound
-    from Theorem 10 involves π(G). The |E|/|Pairs| - 0.1 check catches
+    from the forwarding-index theorem involves π(G). The |E|/|Pairs| - 0.1 check catches
     catastrophic bugs (NaN, zero, sign errors) without spuriously failing
     at small n and d.
     """

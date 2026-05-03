@@ -5,4 +5,5 @@ scipy>=1.10
 matplotlib>=3.7
 pandas>=2.0
 tqdm>=4.65
+networkx>=3.0
 pytest>=7.4

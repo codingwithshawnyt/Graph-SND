@@ -1,6 +1,6 @@
 """Sanity check: Graph-SND at p=1.0 recovers DiCo's full SND.
 
-This mirrors the recovery property (Proposition 2 in the Graph-SND
+This mirrors the complete-graph recovery property in the Graph-SND
 paper) but runs on the DiCo codepath, catching any integration bug
 that would break equivalence between ``compute_diversity(..., "full")``
 and ``compute_diversity(..., "graph_p01", p=1.0)``.

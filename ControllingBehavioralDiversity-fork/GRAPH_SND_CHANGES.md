@@ -1,8 +1,8 @@
 # Graph-SND changes in this DiCo fork
 
-This fork integrates **uniform-weight Graph-SND** (Remark 8 / Theorem 9 in the
-Graph-SND paper) as a drop-in replacement for full SND in DiCo’s diversity
-control loop. Training, losses, and rollouts are otherwise unchanged.
+This fork integrates **uniform-weight Graph-SND** as a drop-in replacement for
+full SND in DiCo's diversity control loop. Training, losses, and rollouts are
+otherwise unchanged.
 
 ## New files
 

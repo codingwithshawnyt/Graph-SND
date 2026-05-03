@@ -15,7 +15,7 @@ Produces ``figures/timing_n500.pdf`` with two panels:
 Sources are kept as separate CSV lookups because each was collected
 under a different timing regime (CPU frozen-checkpoint at small n, GPU
 online at n=100, GPU frozen-init at n=500); the right panel
-deliberately mixes those regimes because Proposition 6's structural
+deliberately mixes those regimes because the structural
 prediction should be regime-invariant.
 
 CLI::

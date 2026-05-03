@@ -175,7 +175,7 @@ def test_uniform_sample_estimator_m_equals_n_pairs_matches_snd() -> None:
 
 
 def test_serfling_tighter_than_hoeffding_for_large_m() -> None:
-    """Remark 3: Serfling correction never widens the bound."""
+    """Serfling correction never widens the Hoeffding radius."""
     n_pairs = 120
     d_max = 2.0
     delta = 0.05

@@ -5,8 +5,8 @@ This module is a drop-in replacement layer in front of DiCo's full
 When ``estimator == "full"`` we delegate bit-identically to the existing
 DiCo codepath; when ``estimator in {"graph_p01", "graph_p025"}`` we
 measure diversity on a Bernoulli(p) random subgraph with the
-uniform-weight Graph-SND estimator (Remark 8 / Theorem 9 in the
-Graph-SND paper). When ``estimator == "knn"`` we build a dynamic
+uniform-weight Graph-SND estimator analyzed in the Graph-SND paper.
+When ``estimator == "knn"`` we build a dynamic
 k-nearest-neighbour graph from agent spatial coordinates and compute
 uniform-weight Graph-SND over that localized subgraph.
 
@@ -33,8 +33,9 @@ logger = logging.getLogger(__name__)
 
 # Lazily resolved ``knn_edges`` from the sibling ``graphsnd`` package (lives at
 # the Graph-SND repo root, not inside ``ControllingBehavioralDiversity-fork``).
-# Riddle-style setups often forget ``pip install -e ..`` from the repo root; we
-# prepend the root to ``sys.path`` once so ``import graphsnd`` works anyway.
+# Cluster-style setups sometimes forget ``pip install -e ..`` from the repo
+# root; we prepend the root to ``sys.path`` once so ``import graphsnd`` works
+# anyway.
 _knn_edges_impl = None
 
 # Lazily resolved ``random_regular_edges`` from the sibling ``graphsnd`` package.
@@ -45,7 +46,7 @@ def _import_graphsnd_symbol(symbol_name: str):
     """Import ``graphsnd.graphs.<symbol_name>`` robustly when the fork's own
     working directory shadows the repository-level ``graphsnd`` package.
 
-    On some deployments (notably riddle), the process starts from
+    On some deployments, the process starts from
     ``ControllingBehavioralDiversity-fork``. Python then resolves
     ``import graphsnd`` against a fork-local package first, which may not
     expose all symbols (e.g., ``random_regular_edges``). In that case we:
@@ -238,8 +239,8 @@ def compute_graph_snd_uniform(
 ) -> torch.Tensor:
     """Uniform-weight Graph-SND: arithmetic mean of pairwise Wasserstein over ``edges``.
 
-    This is the estimator described in Remark 8 of the Graph-SND paper,
-    which Theorem 9's concentration bound applies to. It reuses DiCo's
+    This is the uniform-edge sample mean analyzed in the Graph-SND paper.
+    It reuses DiCo's
     own closed-form Gaussian Wasserstein kernel
     (``compute_statistical_distance``) so the numerics are identical to
     the full-SND path on any shared edge.

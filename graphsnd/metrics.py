@@ -8,9 +8,9 @@ Functions
 - ``snd``: full System Neural Diversity, eq. (2).
 - ``graph_snd``: weighted Graph-SND over an edge list (Definition 1).
 - ``ht_estimator``: Horvitz-Thompson unbiased estimator of ``SND`` over a
-  random Bernoulli graph (Proposition 5).
+  random Bernoulli graph.
 - ``uniform_sample_estimator``: uniform-weight sample mean used in the
-  concentration theorem (Remark 2 / Theorem 6).
+  finite-population concentration theorem.
 
 Shape conventions
 -----------------
@@ -249,7 +249,7 @@ def graph_snd(
 
 
 def ht_estimator(D: Tensor, p: float, rng: RngLike = None) -> Tensor:
-    """Horvitz-Thompson unbiased estimator of ``SND`` (Proposition 5).
+    """Horvitz-Thompson unbiased estimator of ``SND``.
 
     Each pair ``(i, j)`` is included in the random graph ``G_p``
     independently with probability ``p``, with edge weight ``1/p``. The
@@ -285,7 +285,8 @@ def uniform_sample_estimator(
 
     Let ``E`` be a uniform sample (without replacement) of ``m`` edges
     from the complete pair set ``P``. Return the sample mean of
-    ``D[i, j]`` over those edges. Per Theorem 6, for ``d(i, j) in
+    ``D[i, j]`` over those edges. Under the finite-population
+    concentration theorem, for ``d(i, j) in
     [0, D_max]``,
 
         P(|estimator - SND| >= t | |E| = m)
@@ -307,7 +308,8 @@ def uniform_sample_estimator(
 def hoeffding_bound(d_max: float, m: int, delta: float) -> float:
     """Hoeffding-type concentration radius at confidence ``1 - delta``.
 
-    Returns ``t`` such that, under the assumptions of Theorem 6,
+    Returns ``t`` such that, under the finite-population concentration
+    assumptions,
     ``P(|estimator - SND| > t | |E| = m) <= delta``.
     """
     if not 0.0 < delta < 1.0:
@@ -318,7 +320,7 @@ def hoeffding_bound(d_max: float, m: int, delta: float) -> float:
 
 
 def serfling_bound(d_max: float, m: int, n_pairs: int, delta: float) -> float:
-    """Serfling-type finite-population concentration radius (Remark 3).
+    """Serfling-type finite-population concentration radius.
 
     Adds the sampling-without-replacement correction factor
     ``(1 - (m - 1) / |P|)`` to the Hoeffding exponent.

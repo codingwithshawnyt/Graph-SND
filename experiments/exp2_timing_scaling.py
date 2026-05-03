@@ -1,20 +1,20 @@
 """Experiment 2: frozen-init wall-clock scaling at large n.
 
-Isolates Proposition 6's O(n^2) -> O(|E|) prediction at team sizes
+Isolates the O(n^2) -> O(|E|) prediction at team sizes
 where the n=100 scaling run (:mod:`training.train_navigation_batched`)
 and the Experiment 1 CPU timing sweep (:mod:`experiments.exp1_metric_comparison`)
 start to be dominated by memory and Python-loop overhead.
 
 The experiment is deliberately minimal: we instantiate ``n_agents``
 independently-initialised Gaussian MLP policies (identical architecture
-to the Section 6.6 n=100 training run), evaluate them on a synthetic
+to the n=100 training run), evaluate them on a synthetic
 rollout batch, and time both full-SND and Graph-SND on the resulting
 ``(means, stds)`` tensors. No environment is stepped and no checkpoints
 are required, so the experiment can be launched for any ``n`` up to
 the point where the ``(n, T_total, d_act)`` tensor exceeds GPU memory.
 
 All timings call ``torch.cuda.synchronize`` on both sides of each
-``time.perf_counter`` measurement, matching Section 6.6's stricter
+``time.perf_counter`` measurement, matching the stricter
 timing regime.
 
 CLI::
@@ -30,6 +30,7 @@ import argparse
 import json
 import math
 import random
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -38,6 +39,10 @@ from typing import List, Sequence, Tuple
 import numpy as np
 import pandas as pd
 import torch
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from graphsnd.batched_policies import BatchedGaussianMLPPolicy
 from graphsnd.graphs import bernoulli_edges, complete_edges
@@ -165,7 +170,7 @@ def time_graph_snd(
 
     The per-trial cost includes both graph construction (CPU-side
     sampling + host->device copy) and the sampled-edge aggregation, which
-    matches Section 6.6's ``measure_snd_during_training`` and so produces
+    matches ``measure_snd_during_training`` and so produces
     directly comparable absolute times.
     """
     times = []

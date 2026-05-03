@@ -5,15 +5,15 @@ Given frozen heterogeneous Gaussian policies (produced by
 validations of the paper's core Graph-SND results plus a runtime
 comparison:
 
-1. **Proposition 1 (recovery on K_n)** at n=4. Computes full SND and
+1. **Recovery on K_n** at n=4. Computes full SND and
    complete-graph Graph-SND from the same rollout-derived distance
    matrix ``D``; they should match to floating-point precision.
-2. **Proposition 5 (HT unbiasedness)** at n=8. For each ``p`` in a
+2. **HT unbiasedness** at n=8. For each ``p`` in a
    small grid, draws many Bernoulli graphs, evaluates the
    Horvitz-Thompson estimator on each, and reports the sample mean
    versus the true SND with a 95 percent CI on the mean. The CI should
    bracket zero bias.
-3. **Theorem 6 / Remark 3 (concentration)** at n=16. For each ``m`` in
+3. **Finite-population concentration** at n=16. For each ``m`` in
    a grid, draws many uniform-size edge samples, evaluates the
    uniform-weight estimator on each, and plots the empirical
    ``P(|estimator - SND| >= t)`` against the Hoeffding and Serfling
@@ -38,6 +38,7 @@ import argparse
 import json
 import math
 import random
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,6 +47,10 @@ from typing import List
 import numpy as np
 import pandas as pd
 import torch
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from graphsnd.graphs import (
     bernoulli_edges,
@@ -145,7 +150,7 @@ def run_prop1(
     out_dir: Path,
     ckpt_dir: Path,
 ) -> pd.DataFrame:
-    """Proposition 1: exact recovery of SND on K_n for n=4."""
+    """Exact recovery of SND on K_n for n=4."""
     print("[Prop 1] recovery on K_n at n=4...")
     rows = []
     for tag in cfg.iter_tags:
@@ -186,7 +191,7 @@ def run_prop5(
     out_dir: Path,
     ckpt_dir: Path,
 ) -> pd.DataFrame:
-    """Proposition 5: HT estimator unbiasedness at n=8."""
+    """HT estimator unbiasedness at n=8."""
     print("[Prop 5] HT unbiasedness at n=8...")
     rows = []
     for tag in cfg.iter_tags:
@@ -234,7 +239,7 @@ def run_thm6(
     out_dir: Path,
     ckpt_dir: Path,
 ) -> pd.DataFrame:
-    """Theorem 6 / Remark 3: concentration at n=16."""
+    """Finite-population concentration at n=16."""
     print("[Thm 6] concentration at n=16...")
     rows = []
     for tag in cfg.iter_tags:

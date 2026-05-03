@@ -30,6 +30,7 @@ import argparse
 import json
 import os
 import random
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +40,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch import Tensor
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from graphsnd.policies import (
     GaussianMLPPolicy,

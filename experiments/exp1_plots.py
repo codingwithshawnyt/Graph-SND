@@ -57,7 +57,7 @@ def plot_recovery(df: pd.DataFrame, out_path: Path) -> None:
     b2 = ax_bar.bar(x + width / 2, graph_vals, width, label=r"Graph-SND on $K_n$", color="#ff7f0e")
     ax_bar.set_xticks(x, [t.replace("iter", "iter ") for t in iters])
     ax_bar.set_ylabel("diversity")
-    ax_bar.set_title("Proposition 2: recovery at $n=4$")
+    ax_bar.set_title("Complete-graph recovery at $n=4$")
     ax_bar.legend(loc="upper left")
     for bars in (b1, b2):
         for bar in bars:

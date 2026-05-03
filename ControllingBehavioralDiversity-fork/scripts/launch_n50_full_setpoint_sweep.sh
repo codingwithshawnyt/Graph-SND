@@ -294,7 +294,7 @@ echo "[$(date -Is)] done. worker exit codes: GPU 0 -> ${rc0}, GPU 1 -> ${rc1}"
 echo "[$(date -Is)] outputs under: ${RESULTS_BASE}/"
 echo "[$(date -Is)] next step on local machine:"
 echo "  rsync -av --include='**/graph_snd_log.csv' --filter='-! */' \\"
-echo "      <user>@<riddle>:${RESULTS_BASE}/ \\"
+echo "      <user>@<host>:${RESULTS_BASE}/ \\"
 echo "      ControllingBehavioralDiversity-fork/results/neurips_final_n50_setpoint_sweep/"
 echo "  python experiments/n50_bern_vs_full_comparison.py"
 

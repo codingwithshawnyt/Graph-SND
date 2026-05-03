@@ -88,7 +88,7 @@ def test_gradient_is_independent_across_agents():
 
     Concretely: perturbing the loss at only agent ``k`` must not touch
     any other agent's parameter gradients. This is the mathematical
-    property Proposition 2 (graph-automorphism invariance) rests on, and
+    graph-automorphism invariance rests on, and
     it is the reason ``bmm`` is correct here where ``DataParallel``
     replication would be wrong.
     """
@@ -191,7 +191,7 @@ def test_batched_checkpoint_loads_from_existing_per_agent_file(tmp_path: Path):
 
 def test_batched_forward_feeds_graph_snd_pipeline():
     """The batched means/stds must be directly consumable by the existing
-    Graph-SND metric code (Proposition 2 recovery at n=100 will use
+    Graph-SND metric code (complete-graph recovery at n=100 will use
     exactly this shape contract overnight)."""
     torch.manual_seed(6)
     n = 10

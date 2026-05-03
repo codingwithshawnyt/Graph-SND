@@ -70,6 +70,7 @@ import csv
 import json
 import math
 import random
+import sys
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -79,6 +80,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch import Tensor
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from graphsnd.batched_policies import (
     BatchedGaussianMLPPolicy,

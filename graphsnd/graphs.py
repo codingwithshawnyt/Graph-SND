@@ -11,16 +11,16 @@ scales linearly in ``|E|`` rather than quadratically in ``n``.
 Graph families:
 
 - ``complete_edges(n)``: all :math:`\\binom{n}{2}` pairs. Recovers full
-  SND on ``K_n`` (Proposition 1).
+  SND on ``K_n``.
 - ``bernoulli_edges(n, p, rng)``: each pair is included independently
   with probability ``p``. Used with Horvitz-Thompson weights for the
-  unbiased estimator (Proposition 5).
+  unbiased estimator.
 - ``uniform_size_edges(n, m, rng)``: exactly ``m`` edges drawn uniformly
   without replacement. The sampling-without-replacement setup for the
-  concentration bound (Theorem 6 / Lemma 7).
+  finite-population concentration bound.
 - ``random_regular_edges(n, d, rng)``: a random ``d``-regular graph.
   Near-Ramanujan with high probability (Friedman 2003); used in the
-  expander sparsification ablation (Corollary 11).
+  expander sparsification ablation.
 - ``knn_edges(features, k)``: k-nearest-neighbour graph over agent
   feature vectors.
 
@@ -93,8 +93,8 @@ def bernoulli_edges(n: int, p: float, rng: RngLike = None) -> Tensor:
 def uniform_size_edges(n: int, m: int, rng: RngLike = None) -> Tensor:
     """Sample ``m`` unordered pairs uniformly without replacement.
 
-    This is the finite-population sampling setup of Lemma 7 in the
-    paper: the resulting edge set is a uniform random subset of
+    This is the finite-population sampling setup used in the paper: the
+    resulting edge set is a uniform random subset of
     :math:`\\binom{\\mathcal{A}}{2}` of size exactly ``m``.
 
     Parameters

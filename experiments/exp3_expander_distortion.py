@@ -1,10 +1,10 @@
-"""Experiment 3: expander sparsification ablation (Theorem 10, Corollary 11).
+"""Experiment 3: expander sparsification ablation.
 
 Validates the deterministic fixed-G distortion bound and its expander
-sparsification corollary.  For a d-regular spectral expander with
-d = Theta(log n), Theorem 10 promises SND / SND_G^u in
-[|E|/|P|, |E|*pi(G)/|P|], and the corollary gives O(log n) worst-case
-relative distortion at |E| = Theta(n log n) edges.
+sparsification corollary. For a d-regular spectral expander with
+d = Theta(log n), the forwarding-index theorem controls worst-case
+distortion through pi(G), yielding O(log n) worst-case relative
+distortion at |E| = Theta(n log n) edges.
 
 The experiment measures:
 
@@ -44,6 +44,7 @@ import argparse
 import json
 import math
 import random
+import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -54,6 +55,10 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import Tensor
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from graphsnd.batched_policies import (
     BatchedGaussianMLPPolicy,
@@ -560,7 +565,7 @@ def _resolve_dtype(name: str) -> torch.dtype:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Expander sparsification ablation for Theorem 10 / Corollary 11."
+        description="Expander sparsification ablation for Graph-SND."
     )
     parser.add_argument(
         "--n-agents", type=str, default="50",
