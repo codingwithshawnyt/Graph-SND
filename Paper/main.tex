@@ -476,6 +476,23 @@ $\Theta(n/k)$ in the number of pairwise distance evaluations. This
 statement excludes the cost of constructing $G$.
 \end{proposition}
 
+\begin{remark}[Graph construction cost]
+\label{rem:graph-construction-cost}
+Proposition~\ref{prop:complexity} counts pairwise behavioral-distance
+evaluations only. Graph construction is graph-family dependent:
+independent Bernoulli sampling over all pairs costs $O(n^2)$ random
+draws, but fixed-size or skip-sampling implementations can generate
+$O(|E|)$ sampled edges directly; random $d$-regular generators based on
+configuration-model style constructions are near-linear in $nd$ up to
+rejection or repair steps; and exact $k$-NN in observation space requires
+the $O(n^2)$ pairwise-coordinate distance table unless replaced by an
+approximate nearest-neighbor index. Table~\ref{tab:graph-build} reports
+the measured construction overhead for the graph builders used here; in
+the evaluated regimes ($n\leq500$), construction is small relative to
+full pairwise metric evaluation, but it should be remeasured for much
+larger or dynamically rebuilt structured graphs.
+\end{remark}
+
 \subsection{Sampling estimators of $\SND$}
 \label{sec:method:estimator}
 
@@ -583,7 +600,8 @@ only on boundedness (and for Theorem~\ref{thm:distortion}, triangle
 inequality) of the pairwise dissimilarity $d(i,j)$, not on the
 Gaussian/Wasserstein instantiation itself; e.g., on discrete action
 spaces one may substitute bounded metrics such as total variation or
-Jensen--Shannon divergence without changing the graph-aggregation logic.
+the square-root Jensen--Shannon metric without changing the
+graph-aggregation logic.
 
 % ============================================================
 \section{Experiments}
@@ -609,8 +627,8 @@ online PPO and to $n{=}50$ for DiCo set-point control, where a
 head-to-head Bernoulli-$0.1$ vs full-SND sweep over three seeds and
 three set points shows training quality within observed seed-to-seed
 variation (sub-$1\%$ relative tracking error for both estimators,
-reward within $1$ SEM per cell) at a measured ${\sim}9.5{\times}$
-lower per-call metric cost for Bernoulli-$0.1$
+paired reward differences centered near zero) at a measured
+${\sim}9.5{\times}$ lower per-call metric cost for Bernoulli-$0.1$
 (Appendix~\ref{app:dico-n50-sweep}).
 
 \subsection{Setup}
@@ -855,11 +873,32 @@ applied-$\SND$ tracking within observed seed-to-seed variation
 ($0.42$--$0.53\%$ relative tracking error vs $0.31$--$0.37\%$ for
 full SND; paired mean reward difference
 $-6.2{\times}10^{-4}\pm9.2{\times}10^{-3}$ SEM across the nine
-matched cells) at a measured $9.25$--$9.63\times$ lower per-call metric
+matched cells) at a measured $9.24$--$9.63\times$ lower per-call metric
 cost, matching the $\binom{n}{2}/\mathbb{E}[|E|]{=}10$ prediction
 of Proposition~\ref{prop:complexity};
 Appendix~\ref{app:dico-n50-sweep} reports the $18$-run head-to-head
 in full.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+$\SND_{\mathrm{des}}$ & Rel.\ tracking err.\ (Bern/full) & Reward (Bern/full) & Metric speedup \\
+\midrule
+$0.12$ & $0.53\%$ / $0.37\%$ & $0.295{\pm}0.016$ / $0.325{\pm}0.008$ & $9.63\times$ \\
+$0.14$ & $0.48\%$ / $0.31\%$ & $0.338{\pm}0.008$ / $0.327{\pm}0.007$ & $9.39\times$ \\
+$0.15$ & $0.42\%$ / $0.35\%$ & $0.350{\pm}0.005$ / $0.333{\pm}0.009$ & $9.24\times$ \\
+\bottomrule
+\end{tabular}
+\caption{Compact main-text summary of the $n{=}50$ DiCo head-to-head
+against full SND. Each row aggregates three matched seeds on the late
+window (last $50$ iterations); Bernoulli-$0.1$ uses
+$\E[|E|]=122.5$ sampled edges versus $1{,}225$ full pairs. Full curves
+and per-cell statistics appear in Appendix~\ref{app:dico-n50-sweep}.}
+\label{tab:dico-n50-main}
+\end{table}
+
 Separately, a single-seed feasibility run at $n{=}50$ with the same
 hyperparameters as the Bernoulli/full head-to-head
 (Appendix~\ref{app:dico-n50-sweep}) pairs unconstrained IPPO against
@@ -1098,11 +1137,20 @@ sharpens the expander bound under the explicit, measurable condition
 that $\|\mathbf{D}\|_*/(n\,\SND(\mathbf{D}))$ is controlled, but a fully
 unconditional distribution-dependent explanation of the observed
 near-unit ratios remains open.
-\emph{(4) Non-Gaussian scope is still narrow:} we now include one
-non-Gaussian, non-VMAS transfer panel (PettingZoo MPE simple-spread,
-categorical policies, TVD distance, $n{=}10$), but broader
-non-Gaussian coverage (more tasks, larger $n$, and additional
-dissimilarities beyond TVD) remains untested.
+\emph{(4) Non-Gaussian scope is still narrow:} empirical evaluation of
+the distance-agnostic claim is limited to one real-environment
+discrete-action panel (PettingZoo MPE simple-spread, $n{=}10$,
+categorical policies, TVD distance) and a synthetic Dirichlet/TVD
+concentration check (Appendix~\ref{app:verify}). Proposition~\ref{prop:unbiased}
+is distance-agnostic, Theorem~\ref{thm:concentration} requires only
+bounded $d(i,j)\in[0,D_{\max}]$, Theorem~\ref{thm:distortion}
+additionally requires the triangle inequality, and
+Proposition~\ref{prop:spectral-nuclear-discrepancy} requires a symmetric
+zero-diagonal distance matrix with controlled nuclear norm. Thus the
+formal guarantees are not tied to Gaussian policies or Wasserstein
+distances, but quantitative scaling and closed-loop validation for
+larger discrete-action MARL benchmarks and additional bounded
+dissimilarities remain untested.
 \emph{(5) IPPO-only algorithm scope:} every RL result uses
 Independent PPO; extending to centralized-critic and other
 policy-gradient algorithms covered by DiCo is a straightforward but
@@ -1812,7 +1860,7 @@ Bernoulli-$0.1$ queries only ${\sim}10\%$ of pairs. Both estimators
 remain well under the $1\%$ floor of the controller. Panel~(d)
 isolates per-call metric cost: Bernoulli-$0.1$ averages
 ${\sim}2.0\,\mathrm{ms}$/call, full SND averages
-${\sim}18.9\,\mathrm{ms}$/call, a $9.25$--$9.63\times$ ratio that
+${\sim}18.9\,\mathrm{ms}$/call, a $9.24$--$9.63\times$ ratio that
 tracks the analytical $\binom{n}{2}/\mathbb{E}[|E|]{=}10$ prediction
 of Proposition~\ref{prop:complexity} nearly exactly. Because full
 SND iters take $52.4\,\mathrm{s}$ end-to-end at this $n$ and batch
