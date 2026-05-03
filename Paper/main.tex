@@ -442,24 +442,52 @@ $\varepsilon$, it suffices to sample
 $m = O\bigl(D_{\max}^2\, \varepsilon^{-2}\, \log(1/\delta)\bigr)$ edges,
 which for large $n$ is vastly smaller than $\binom{n}{2}$.
 
-A deterministic fixed-$G$ companion (Theorem~\ref{thm:distortion},
-Appendix~\ref{app:proofs}) sandwiches $\SND/\SNDG^{\mathrm{u}}$ between
-$|E|/|\Pairs|$ and $|E|\pi(G)/|\Pairs|$, with $\pi(G)$ the edge
-forwarding index~\citep{heydemann1989forwarding}; on $d$-regular
-expanders this gives ratio $\mathcal{O}(\log n)$ at $\Theta(n\log n)$
-edges~\citep{leighton1999multicommodity}.
-Proposition~\ref{prop:spectral-nuclear-discrepancy} gives a
-complementary spectral discrepancy bound: for $d$-regular $G$, the
-relative error is controlled by graph expansion times
-$\|\mathbf{D}\|_*/(n\,\SND(\mathbf{D}))$, a directly measurable
-effective-rank diagnostic of the distance matrix.
+For fixed sparse graphs, let $\pi(G)$ denote the edge forwarding index:
+the minimum over all pairwise path routings of the maximum number of
+routed paths using any edge~\citep{chung1987forwarding,heydemann1989forwarding}.
+
+\begin{theorem}[Deterministic fixed-$G$ distortion]
+\label{thm:distortion}
+Let $G=(\Agents,E)$ be connected with unit edge weights, and suppose
+$d:\Pairs\to\R_{\ge0}$ satisfies the triangle inequality. With
+$\SNDG^{\mathrm{u}}(\mathbf{D},G):=|E|^{-1}\sum_{\{i,j\}\in E}d(i,j)$,
+\begin{equation}
+\label{eq:distortion}
+\frac{|E|}{|\Pairs|}\SNDG^{\mathrm{u}}(\mathbf{D},G)
+\leq \SND(\mathbf{D})
+\leq
+\frac{|E|\pi(G)}{|\Pairs|}\SNDG^{\mathrm{u}}(\mathbf{D},G).
+\end{equation}
+Thus $|E|/|\Pairs|\leq\SND/\SNDG^{\mathrm{u}}\leq|E|\pi(G)/|\Pairs|$
+whenever $\SNDG^{\mathrm{u}}>0$, and both ratios are $1$ on $K_n$.
+\end{theorem}
+
+\begin{corollary}[Expander sparsification]
+\label{cor:expander-distortion}
+For a $d$-regular spectral expander,
+$\pi(G)=\mathcal{O}(n\log n/d)$~\citep{leighton1999multicommodity}, so
+Theorem~\ref{thm:distortion} gives $\mathcal{O}(\log n)$ worst-case
+relative distortion using only $|E|=\Theta(n\log n)$ pairwise distances
+when $d=\Theta(\log n)$.
+\end{corollary}
+
+\begin{remark}[Spectral sharpening]
+\label{rem:main-spectral-sharpening}
+Proposition~\ref{prop:spectral-nuclear-discrepancy} (Appendix~\ref{app:proofs})
+sharpens this fixed-graph guarantee under controlled normalized nuclear
+norm $\rho_*(\mathbf{D})=\|\mathbf{D}\|_*/(n\,\SND(\mathbf{D}))$: for
+$d$-regular expanders, the relative error scales as
+$\mathcal{O}(\rho_*(\mathbf{D})/\sqrt d)$, hence
+$\mathcal{O}(\rho_*/\sqrt{\log n})$ at $d=\Theta(\log n)$. This does not
+prove the empirical near-unit ratios, but it explains why low-effective-
+rank MARL distance matrices can be much easier than the worst case.
+\end{remark}
+
 Both Theorems~\ref{thm:concentration} and~\ref{thm:distortion} depend
 only on boundedness (and for Theorem~\ref{thm:distortion}, triangle
-inequality) of the pairwise dissimilarity $d(i,j)$, not on the
-Gaussian/Wasserstein instantiation itself; e.g., on discrete action
-spaces one may substitute bounded metrics such as total variation or
-the square-root Jensen--Shannon metric without changing the
-graph-aggregation logic.
+inequality) of $d(i,j)$, not on the Gaussian/Wasserstein instantiation;
+discrete action spaces may substitute bounded metrics such as total
+variation or the square-root Jensen--Shannon metric.
 
 % ============================================================
 \section{Experiments}
@@ -488,7 +516,11 @@ stays near the predicted $1/p=10\times$ speedup
 GPU timing sweep through $n=500$ follows the same
 $\binom{n}{2}/|E|$ law: at $n=500$, Bernoulli-$0.1$ reduces mean metric
 time from $15{,}502.8$ ms to $1{,}553.6$ ms
-(Appendix~\ref{app:verify}, Figure~\ref{fig:timing-n500}).
+(Figure~\ref{fig:timing-n500}). Together, the online $n=100$ run and
+the frozen $n=500$ sweep separate the two questions a reviewer should
+care about: the sampled metric tracks full SND during learning, and the
+wall-clock reduction persists at the larger team sizes where the
+quadratic complete graph becomes expensive.
 
 \begin{figure}[t]
 \centering
@@ -500,6 +532,17 @@ non-stationary training dynamics.}
 \label{fig:scaling-n100}
 \end{figure}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.85\linewidth]{figures/timing_n500.pdf}
+\caption{Wall-clock scaling of $\SNDG^{\mathrm{u}}(G_p)$ versus full
+SND across $n\in\{4,\ldots,500\}$. Bernoulli-$p$ sampling follows the
+structural $1/p$ speedup, and Bernoulli-$0.1$ remains near
+$10\times$ through $n=500$; sampled timings include edge sampling and
+edge-transfer overhead.}
+\label{fig:timing-n500}
+\end{figure}
+
 \subsection{Closed-loop diversity control on VMAS Dispersion}
 \label{sec:experiments:dico-dispersion}
 
@@ -508,13 +551,28 @@ We integrate Graph-SND into the DiCo diversity controller
 $k$-NN, Bernoulli-$0.1$, and random $d$-regular Graph-SND all track
 $\SND_{\mathrm{des}}=0.1$ and match the full-SND controller's reward
 within seed variation while reducing per-call metric cost
-(Appendix~\ref{app:dico-n10}). The stronger closed-loop evidence is the
-$n=50$ head-to-head in Table~\ref{tab:dico-n50-main}: each of three
-seeds and three set points is trained twice, once with Bernoulli-$0.1$
-Graph-SND and once with full SND. Bernoulli-$0.1$ tracks all targets to
-sub-$1\%$ relative error, yields paired reward differences centered near
-zero, and reduces metric cost by $9.24$--$9.63\times$, matching the
-$10\times$ pair-count prediction.
+(Figure~\ref{fig:dico-dispersion-knn}). The stronger closed-loop
+evidence is the $n=50$ head-to-head in
+Table~\ref{tab:dico-n50-main}: each of three seeds and three set points
+is trained twice, once with Bernoulli-$0.1$ Graph-SND and once with full
+SND. Bernoulli-$0.1$ tracks all targets to sub-$1\%$ relative error,
+yields paired reward differences centered near zero, and reduces metric
+cost by $9.24$--$9.63\times$, matching the $10\times$ pair-count
+prediction. This is the main closed-loop substitution test: full SND is
+not merely evaluated post hoc, but trained as the competing DiCo signal
+on the same seed and set-point grid. The only systematic difference is
+the aggregation used by the controller, and the observed differences are
+smaller than seed-to-seed variation.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.88\linewidth]{figures/neurips_knn_plot.pdf}
+\caption{DiCo with Graph-SND on VMAS Dispersion ($n{=}10$, ten foods,
+$\SND_{\mathrm{des}}{=}0.1$, three seeds). Sparse $k$-NN,
+Bernoulli-$0.1$, and expander aggregators track the full-SND controller
+while reducing per-call metric cost.}
+\label{fig:dico-dispersion-knn}
+\end{figure}
 
 \begin{table}[t]
 \centering
@@ -532,7 +590,10 @@ $0.15$ & $0.42\%$ / $0.35\%$ & $0.350{\pm}0.005$ / $0.333{\pm}0.009$ & $9.24\tim
 against full SND. Each row aggregates three matched seeds on the late
 window (last $50$ iterations); Bernoulli-$0.1$ uses
 $\E[|E|]=122.5$ sampled edges versus $1{,}225$ full pairs. Full curves
-and per-cell statistics appear in Appendix~\ref{app:dico-n50-sweep}.}
+and per-cell statistics appear in Appendix~\ref{app:dico-n50-sweep};
+across all nine matched cells, the paired mean reward difference
+(Bernoulli minus full) is $-6.2{\times}10^{-4}\pm9.2{\times}10^{-3}$
+SEM.}
 \label{tab:dico-n50-main}
 \end{table}
 
@@ -557,6 +618,19 @@ simple-spread transfer panel with categorical policies and TVD distance
 also shows small bias and matched cost reduction
 (Appendix~\ref{app:verify}, Table~\ref{tab:mpe-tvd-panel}).
 
+The expander claim is deliberately split into worst-case and empirical
+parts. The forwarding-index theorem gives a deterministic guarantee for
+arbitrary metric distance tables, not a promise of near-unit distortion.
+The near-unit ratios in Figure~\ref{fig:expander-distortion} are a
+data-dependent observation, partially explained by
+Proposition~\ref{prop:spectral-nuclear-discrepancy}: when the realized
+distance matrix has controlled normalized nuclear norm, expansion turns
+the logarithmic worst-case dependence into a decreasing spectral
+discrepancy bound. This distinction matters because fixed sparse graphs
+change the measurement target unless their structure is justified; the
+expander result shows one fixed-graph choice that remains accurate on
+the tested MARL distance matrices while retaining near-linear edge count.
+
 \begin{figure}[t]
   \centering
   \includegraphics[width=\textwidth]{figures/expander_distortion_main.pdf}
@@ -580,6 +654,30 @@ worst-case structure is desired. The same graph layer applies beyond
 Gaussian Wasserstein SND whenever the pairwise dissimilarity satisfies
 the relevant boundedness or metric assumptions (Appendix~\ref{app:verify},
 Table~\ref{tab:mpe-tvd-panel}).
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{p{0.20\linewidth}p{0.25\linewidth}p{0.42\linewidth}}
+\toprule
+Goal & Recommended $G$ & Main guarantee and use case \\
+\midrule
+Estimate full $\SND$ & Bernoulli-$p$ or fixed-size random sample &
+Horvitz--Thompson unbiasedness and $O(1/\sqrt m)$ concentration; best
+when full-system diversity remains the target. \\
+Measure local diversity & Communication, spatial, or $k$-NN graph &
+Interpretable fixed-$G$ signal over interacting pairs; appropriate when
+non-edges are intentionally excluded from the semantic target. \\
+Use a fixed sparse proxy & Random $d$-regular expander,
+$d=\Theta(\log n)$ & Forwarding-index worst-case structure plus
+near-unit empirical ratios at $\Theta(n\log n)$ edges in our ablation. \\
+\bottomrule
+\end{tabular}
+\caption{Practical graph-selection rule. The graph is not a nuisance
+parameter: it decides whether Graph-SND is estimating full SND or
+defining a different, localized diversity functional.}
+\label{tab:graph-selection-rule}
+\end{table}
 
 \paragraph{Limitations and future work.}
 The empirical scope remains intentionally focused. Online training is
@@ -793,36 +891,6 @@ on $G$ alone, satisfies $\pi(K_n)=1$, admits closed forms for many
 graph families (hypercubes, tori, Cayley graphs), and is
 $\mathcal{O}(n\log n / d)$ for $d$-regular graphs with bounded spectral
 gap~\citep{leighton1999multicommodity}.
-
-\begin{theorem}[Deterministic fixed-$G$ distortion]
-\label{thm:distortion}
-Let $G=(\Agents, E)$ be a connected graph with unit edge weights, and
-suppose $d:\Pairs\to\R_{\geq 0}$ satisfies the triangle inequality
-$d(i,j)\leq d(i,k)+d(k,j)$ for all $i,j,k\in\Agents$ (automatic for
-the Monte Carlo distance~\eqref{eq:dij}, since $\Wass$ is a metric).
-Writing $\SNDG^{\mathrm{u}}(\mathbf{D},G):=|E|^{-1}\sum_{\{i,j\}\in E}
-d(i,j)$ for the unit-weight variant of $\SNDG$,
-\begin{equation}
-\label{eq:distortion}
-\frac{|E|}{|\Pairs|}\,\SNDG^{\mathrm{u}}(\mathbf{D}, G)
-\;\leq\; \SND(\mathbf{D})
-\;\leq\; \frac{|E|\,\pi(G)}{|\Pairs|}\,\SNDG^{\mathrm{u}}(\mathbf{D}, G),
-\end{equation}
-so $|E|/|\Pairs|\leq\SND(\mathbf{D})/\SNDG^{\mathrm{u}}(\mathbf{D},G)\leq|E|\pi(G)/|\Pairs|$ whenever $\SNDG^{\mathrm{u}}>0$; both ratios are
-$1$ on $K_n$, recovering Proposition~\ref{prop:recovery}.
-\end{theorem}
-
-\begin{corollary}[Expander sparsification]
-\label{cor:expander-distortion}
-If $G$ is a $d$-regular graph on $n$ vertices with bounded spectral
-gap (e.g.\ a spectral expander or a random $d$-regular graph), then
-Theorem~\ref{thm:distortion} and $\pi(G)=\mathcal{O}(n\log n/d)$ give
-$|E|/|\Pairs|=d/(n-1)$ and $|E|\pi(G)/|\Pairs|=\mathcal{O}(\log n)$.
-Choosing $d=\Theta(\log n)$ yields $|E|=\Theta(n\log n)$ pairwise
-distance evaluations with worst-case relative distortion
-$\mathcal{O}(\log n)$, a $\Theta(n/\log n)$-factor reduction against
-full $\SND$.
-\end{corollary}
 
 \begin{proposition}[Spectral discrepancy under nuclear-norm control]
 \label{prop:spectral-nuclear-discrepancy}
@@ -1186,22 +1254,6 @@ speedups reported here.}
 \label{fig:timing}
 \end{figure}
 
-\paragraph{GPU frozen-init timing through $n=500$.}
-Figure~\ref{fig:timing-n500} reports the large-$n$ timing sweep
-summarized in Section~\ref{sec:experiments:scaling}: Bernoulli-$p$
-Graph-SND follows the structural $1/p$ speedup, and Bernoulli-$0.1$
-remains near $10\times$ through $n=500$.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.85\linewidth]{figures/timing_n500.pdf}
-\caption{Wall-clock scaling of $\SNDG^{\mathrm{u}}(G_p)$ versus $\SND$
-across $n\in\{4,\ldots,500\}$ and three hardware/call regimes. The
-large-$n$ GPU timing sweep follows the structural $1/p$ prediction; at
-$p=0.1$, speedups remain near $10\times$ through $n=500$.}
-\label{fig:timing-n500}
-\end{figure}
-
 \paragraph{Graph construction microbenchmark.}
 Because Proposition~\ref{prop:complexity} counts pairwise distance
 evaluations and excludes graph construction, we separately time the
@@ -1234,26 +1286,6 @@ metric-call timings are reported separately in
 Figure~\ref{fig:timing-n500}.}
 \label{tab:graph-build}
 \end{table}
-
-\section{DiCo at $n{=}10$: sparse graph choices}
-\label{app:dico-n10}
-
-Figure~\ref{fig:dico-dispersion-knn} shows the VMAS Dispersion
-$n=10$ study summarized in Section~\ref{sec:experiments:dico-dispersion}.
-DiCo with full SND, $k$-NN Graph-SND, Bernoulli-$0.1$ Graph-SND, and
-expander Graph-SND all track $\SND_{\mathrm{des}}=0.1$ within $2\%$
-relative error and match reward within seed variation, while the sparse
-variants reduce per-call metric cost in the expected pair-count order.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.88\linewidth]{figures/neurips_knn_plot.pdf}
-\caption{DiCo with Graph-SND on VMAS Dispersion ($n{=}10$, ten foods,
-$\SND_{\mathrm{des}}{=}0.1$, three seeds). Sparse $k$-NN,
-Bernoulli-$0.1$, and expander aggregators track the full-SND controller
-while reducing per-call metric cost.}
-\label{fig:dico-dispersion-knn}
-\end{figure}
 
 % ------------------------------------------------------------------
 % Appendix: DiCo head-to-head at n=50 -- Bernoulli-0.1 Graph-SND vs
