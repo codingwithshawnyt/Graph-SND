@@ -106,22 +106,29 @@ def plot_unbiasedness(df: pd.DataFrame, out_path: Path) -> None:
             p, mean, yerr=ci, fmt="o-", color="#2b7aff",
             capsize=4, label=r"HT mean $\pm$ 95% CI",
         )
+        # Staggered diagonal offsets so labels avoid markers, error
+        # bars, connecting lines, AND each other.
+        _ann_style = [
+            # idx 0  p=0.1:  bottom-right
+            dict(xytext=(12, -12), ha="left",  va="top"),
+            # idx 1  p=0.25: top-right
+            dict(xytext=(12,  12), ha="left",  va="bottom"),
+            # idx 2  p=0.5:  top-left
+            dict(xytext=(-12, 12), ha="right", va="bottom"),
+            # idx 3  p=0.75: bottom-left
+            dict(xytext=(-12,-12), ha="right", va="top"),
+        ]
         for idx, (xi, m, b) in enumerate(zip(p, mean, bias_se)):
-            # Place text horizontally beside the error bar to avoid
-            # overlapping the vertical CI whiskers.  The last point
-            # goes left so it doesn't clip the right axis edge.
-            is_last = idx == len(p) - 1
-            x_off = -15 if is_last else 15
-            ha = "right" if is_last else "left"
+            style = _ann_style[idx % len(_ann_style)]
             ax.annotate(
                 f"bias/se = {b:+.2f}",
                 xy=(xi, m),
-                xytext=(x_off, 0),
+                xytext=style["xytext"],
                 textcoords="offset points",
                 fontsize=8,
-                ha=ha, va="center",
+                ha=style["ha"], va=style["va"],
                 bbox=dict(facecolor="white", edgecolor="none",
-                          alpha=0.85, pad=1.5),
+                          alpha=0.7, pad=1.5),
             )
         ax.set_xlim(0.02, 0.85)
         ax.set_xlabel("inclusion probability $p$")
