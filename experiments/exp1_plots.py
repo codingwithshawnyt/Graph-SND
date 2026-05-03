@@ -175,13 +175,14 @@ def plot_concentration(df: pd.DataFrame, out_path: Path) -> None:
         ax.plot(m, t_s, "-", color="#9467bd", label="Serfling $t_S$")
         ax.plot(
             m, p95, "o-", color="#2ca02c",
-            label=r"empirical 95th pct. $|\hat{\mathrm{SND}} - \mathrm{SND}|$",
+            label=r"empirical 95th pct. $|\mathrm{SND}_G^{\mathrm{u}} - \mathrm{SND}|$",
         )
         ax.set_xlabel("sample size $m$")
         ax.set_ylabel("concentration radius")
+        ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_title(
-            f"Thm. 9 (n=16, {tag}; SND = {snd_true:.4f}, $\\delta$={delta:.2f})"
+            f"Thm. 10 (n=16, {tag}; SND = {snd_true:.4f}, $\\delta$={delta:.2f})"
         )
         ax.legend(loc="upper right", fontsize=9)
 
