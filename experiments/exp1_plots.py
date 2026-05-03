@@ -106,29 +106,42 @@ def plot_unbiasedness(df: pd.DataFrame, out_path: Path) -> None:
             p, mean, yerr=ci, fmt="o-", color="#2b7aff",
             capsize=4, label=r"HT mean $\pm$ 95% CI",
         )
-        # Staggered diagonal offsets so labels avoid markers, error
-        # bars, connecting lines, AND each other.
-        _ann_style = [
-            # idx 0  p=0.1:  bottom-right
-            dict(xytext=(12, -12), ha="left",  va="top"),
-            # idx 1  p=0.25: top-right
-            dict(xytext=(12,  12), ha="left",  va="bottom"),
-            # idx 2  p=0.5:  top-left
-            dict(xytext=(-12, 12), ha="right", va="bottom"),
-            # idx 3  p=0.75: bottom-left
-            dict(xytext=(-12,-12), ha="right", va="top"),
-        ]
+        # Per-panel, per-point hardcoded offsets.  The two subplots
+        # have different slopes so a single rule doesn't work.
+        _offsets = {
+            "iter0": [
+                # p=0.1:  bottom-right
+                dict(xytext=(15, -20), ha="left",  va="top"),
+                # p=0.25: top-left
+                dict(xytext=(-15, 20), ha="right", va="bottom"),
+                # p=0.5:  bottom-right
+                dict(xytext=(15, -20), ha="left",  va="top"),
+                # p=0.75: top-left
+                dict(xytext=(-15, 20), ha="right", va="bottom"),
+            ],
+            "iter100": [
+                # p=0.1:  top-right
+                dict(xytext=(15,  20), ha="left",  va="bottom"),
+                # p=0.25: bottom-right
+                dict(xytext=(15, -20), ha="left",  va="top"),
+                # p=0.5:  top-right
+                dict(xytext=(15,  20), ha="left",  va="bottom"),
+                # p=0.75: bottom-left
+                dict(xytext=(-15,-20), ha="right", va="top"),
+            ],
+        }
+        styles = _offsets.get(tag, _offsets["iter0"])
         for idx, (xi, m, b) in enumerate(zip(p, mean, bias_se)):
-            style = _ann_style[idx % len(_ann_style)]
+            s = styles[idx % len(styles)]
             ax.annotate(
                 f"bias/se = {b:+.2f}",
                 xy=(xi, m),
-                xytext=style["xytext"],
+                xytext=s["xytext"],
                 textcoords="offset points",
                 fontsize=8,
-                ha=style["ha"], va=style["va"],
+                ha=s["ha"], va=s["va"],
                 bbox=dict(facecolor="white", edgecolor="none",
-                          alpha=0.7, pad=1.5),
+                          alpha=0.9, pad=2),
             )
         ax.set_xlim(0.02, 0.85)
         ax.set_xlabel("inclusion probability $p$")
