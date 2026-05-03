@@ -236,15 +236,25 @@ def main() -> None:
         axes[0].set_xlabel("Edge fraction  |E| / |P|")
         axes[0].set_ylabel(r"$\mathrm{SND}_G^{\mathrm{u}} \; / \; \mathrm{SND}$")
         axes[0].set_title("(e) n=100 synthetic vs checkpoint")
-        axes[0].legend(fontsize=6, loc="lower right")
 
         axes[1].set_xscale("log")
         axes[1].set_yscale("log")
         axes[1].set_xlabel("Graph-SND time (ms)")
         axes[1].set_ylabel(r"$|\mathrm{SND} - \mathrm{SND}_G^{\mathrm{u}}|$")
         axes[1].set_title("(f) n=100 checkpoint cost-accuracy")
-        axes[1].legend(fontsize=6, loc="upper right")
-        fig_ck.tight_layout()
+
+        # Shared legend below both panels instead of inside each axis.
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig_ck.legend(
+            handles, labels,
+            loc="lower center",
+            bbox_to_anchor=(0.5, -0.02),
+            ncol=2,
+            fontsize=7,
+            frameon=True,
+            edgecolor="#cccccc",
+        )
+        fig_ck.subplots_adjust(bottom=0.32)
         ckpt_path = out_dir / f"{stem}_n100_checkpoint.pdf"
         fig_ck.savefig(ckpt_path, dpi=150, bbox_inches="tight")
         print(f"Checkpoint panel -> {ckpt_path}")
