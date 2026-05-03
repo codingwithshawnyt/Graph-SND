@@ -142,6 +142,8 @@ def plot_unbiasedness(df: pd.DataFrame, out_path: Path) -> None:
                 ha=s["ha"], va=s["va"],
                 bbox=dict(facecolor="white", edgecolor="none",
                           alpha=0.9, pad=2),
+                arrowprops=dict(arrowstyle="-", color="#aaaaaa",
+                                lw=0.7, shrinkA=0, shrinkB=3),
             )
         ax.set_xlim(0.02, 0.85)
         ax.set_xlabel("inclusion probability $p$")
