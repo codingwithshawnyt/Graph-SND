@@ -1,9 +1,9 @@
 {
-  "note": "merged synthetic sweep with n=100 checkpoint panel",
+  "note": "merged synthetic sweep with n=100 checkpoint panel; existing graph/timing results preserved and nuclear-norm diagnostics added locally",
   "rows_written": 300,
   "data_source_counts": {
-    "synthetic": 240,
-    "checkpoint": 60
+    "checkpoint": 60,
+    "synthetic": 240
   },
   "n_values": [
     50,
@@ -11,28 +11,66 @@
     200,
     500
   ],
+  "config": {
+    "n_agents_list": [
+      50,
+      100,
+      200,
+      500
+    ],
+    "num_envs": 32,
+    "rollout_steps": 128,
+    "obs_dim": 18,
+    "act_dim": 2,
+    "n_graph_seeds": 5,
+    "timing_trials": 10,
+    "device": "preserved_existing_csv_with_cpu_svd_diagnostics",
+    "dtype": "float32",
+    "checkpoint": "results/graphsnd_n100_results/n100_overnight_iter500.metric.pt",
+    "seed": 42
+  },
   "per_n_summary": [
     {
       "n": 50,
+      "synthetic_D_nuclear_over_n_snd": 1.9636776412600445,
+      "synthetic_D_nuclear_over_n_dmax": 1.7465062987659852,
+      "synthetic_D_stable_rank": 1.0206168831991127,
       "synthetic_expander_ratio_mean": 1.0000143291212267,
-      "synthetic_expander_ratio_recip_mean": 0.999985922414656
+      "synthetic_expander_ratio_recip_mean": 0.999985922414656,
+      "synthetic_expander_spectral_rel_bound_mean": 0.9396928428076143
     },
     {
       "n": 100,
+      "checkpoint_D_nuclear_over_n_snd": 2.0320302475214356,
+      "checkpoint_D_nuclear_over_n_dmax": 0.9950153745867527,
+      "checkpoint_D_stable_rank": 1.0170229679085687,
       "checkpoint_expander_ratio_mean": 0.99983374498705,
       "checkpoint_expander_ratio_recip_mean": 1.00016692524707,
+      "checkpoint_expander_spectral_rel_bound_mean": 0.9695144263556695,
+      "synthetic_D_nuclear_over_n_snd": 1.984471974191168,
+      "synthetic_D_nuclear_over_n_dmax": 1.6591012933928184,
+      "synthetic_D_stable_rank": 1.010255125982822,
       "synthetic_expander_ratio_mean": 1.0000590600959898,
-      "synthetic_expander_ratio_recip_mean": 0.999941018774948
+      "synthetic_expander_ratio_recip_mean": 0.999941018774948,
+      "synthetic_expander_spectral_rel_bound_mean": 0.9490364888152374
     },
     {
       "n": 200,
+      "synthetic_D_nuclear_over_n_snd": 1.9946343555197692,
+      "synthetic_D_nuclear_over_n_dmax": 1.5842292626341938,
+      "synthetic_D_stable_rank": 1.0051348099829358,
       "synthetic_expander_ratio_mean": 1.0000187212749314,
-      "synthetic_expander_ratio_recip_mean": 0.9999812994552715
+      "synthetic_expander_ratio_recip_mean": 0.9999812994552715,
+      "synthetic_expander_spectral_rel_bound_mean": 0.9367759763751771
     },
     {
       "n": 500,
+      "synthetic_D_nuclear_over_n_snd": 2.000576783904604,
+      "synthetic_D_nuclear_over_n_dmax": 1.5489305359092131,
+      "synthetic_D_stable_rank": 1.0020835571692046,
       "synthetic_expander_ratio_mean": 1.000035856202137,
-      "synthetic_expander_ratio_recip_mean": 0.9999641522679273
+      "synthetic_expander_ratio_recip_mean": 0.9999641522679273,
+      "synthetic_expander_spectral_rel_bound_mean": 0.9220621156997851
     }
   ]
 }
