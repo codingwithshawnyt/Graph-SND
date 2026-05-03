@@ -18,11 +18,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+# ---------- NeurIPS camera-ready defaults ----------
+# Bump font sizes so labels survive two-column PDF scaling (~3.25 in).
+plt.rcParams.update({
+    "font.size": 10,
+    "axes.titlesize": 11,
+    "axes.labelsize": 10,
+    "xtick.labelsize": 9,
+    "ytick.labelsize": 9,
+    "legend.fontsize": 8,
+})
+
+# Colorblind-friendly palette (Wong 2011 / Seaborn "colorblind").
 FAMILY_STYLES = {
-    "random_regular": {"color": "#1f77b4", "marker": "o", "label": "d-regular expander"},
-    "bernoulli": {"color": "#ff7f0e", "marker": "s", "label": "Bernoulli (matched |E|)"},
-    "uniform": {"color": "#2ca02c", "marker": "^", "label": "Uniform (matched |E|)"},
-    "knn": {"color": "#d62728", "marker": "D", "label": "k-NN (matched |E|)"},
+    "random_regular": {"color": "#0072B2", "marker": "o", "label": "d-regular expander"},
+    "bernoulli": {"color": "#E69F00", "marker": "s", "label": "Bernoulli (matched |E|)"},
+    "uniform": {"color": "#009E73", "marker": "^", "label": "Uniform (matched |E|)"},
+    "knn": {"color": "#CC79A7", "marker": "D", "label": "k-NN (matched |E|)"},
 }
 
 
@@ -76,7 +88,7 @@ def plot_panel_a(ax: plt.Axes, df: pd.DataFrame) -> None:
     ax.set_xlabel("Edge fraction  |E| / |P|")
     ax.set_ylabel(r"$\mathrm{SND}_G^{\mathrm{u}} \; / \; \mathrm{SND}$")
     ax.set_xscale("log")
-    ax.legend(fontsize=7, loc="lower right")
+    ax.legend(fontsize=8, loc="lower right")
     ax.set_title("(a) Distortion ratio vs edge density")
 
 
@@ -105,7 +117,7 @@ def plot_panel_b(ax: plt.Axes, df: pd.DataFrame) -> None:
     ax.set_xlabel("Degree d")
     ax.set_ylabel(r"$\pi(G)$ (measured)")
     ax.set_yscale("log")
-    ax.legend(fontsize=7)
+    ax.legend(fontsize=8)
     ax.set_title(r"(b) Forwarding index $\pi(G)$ vs degree")
 
 
@@ -125,7 +137,7 @@ def plot_panel_c(ax: plt.Axes, df: pd.DataFrame) -> None:
     ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
     ax.set_xlabel(r"Spectral gap $1 - \lambda_2 / d$")
     ax.set_ylabel(r"$\mathrm{SND}_G^{\mathrm{u}} \; / \; \mathrm{SND}$")
-    ax.legend(fontsize=7, loc="lower right")
+    ax.legend(fontsize=8, loc="lower right")
     ax.set_title("(c) Distortion vs spectral gap")
 
 
@@ -146,7 +158,7 @@ def plot_panel_d(ax: plt.Axes, df: pd.DataFrame) -> None:
     ax.set_ylabel(r"$|\mathrm{SND} - \mathrm{SND}_G^{\mathrm{u}}|$")
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.legend(fontsize=7, loc="upper right")
+    ax.legend(fontsize=8, loc="upper right")
     ax.set_title("(d) Cost-accuracy Pareto")
 
 
@@ -209,6 +221,7 @@ def main() -> None:
                     marker=style["marker"],
                     color=style["color"],
                     linestyle="--",
+                    alpha=0.6,
                     capsize=2,
                     label=f"{style['label']} (checkpoint)",
                 )
@@ -250,7 +263,7 @@ def main() -> None:
             loc="lower center",
             bbox_to_anchor=(0.5, -0.02),
             ncol=2,
-            fontsize=7,
+            fontsize=8,
             frameon=True,
             edgecolor="#cccccc",
         )
