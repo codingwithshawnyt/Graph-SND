@@ -106,20 +106,20 @@ def plot_unbiasedness(df: pd.DataFrame, out_path: Path) -> None:
             p, mean, yerr=ci, fmt="o-", color="#2b7aff",
             capsize=4, label=r"HT mean $\pm$ 95% CI",
         )
-        for xi, m, b in zip(p, mean, bias_se):
-            # Place label below the marker when the point is above the
-            # SND reference line, and above when below, so text never
-            # overlaps the connecting line or error bars.
-            above = m >= snd_true
-            y_off = -14 if above else 14
-            va = "top" if above else "bottom"
+        for idx, (xi, m, b) in enumerate(zip(p, mean, bias_se)):
+            # Place text horizontally beside the error bar to avoid
+            # overlapping the vertical CI whiskers.  The last point
+            # goes left so it doesn't clip the right axis edge.
+            is_last = idx == len(p) - 1
+            x_off = -15 if is_last else 15
+            ha = "right" if is_last else "left"
             ax.annotate(
                 f"bias/se = {b:+.2f}",
                 xy=(xi, m),
-                xytext=(0, y_off),
+                xytext=(x_off, 0),
                 textcoords="offset points",
                 fontsize=8,
-                ha="center", va=va,
+                ha=ha, va="center",
                 bbox=dict(facecolor="white", edgecolor="none",
                           alpha=0.85, pad=1.5),
             )
