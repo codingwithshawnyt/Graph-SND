@@ -214,7 +214,7 @@ def plot(df: pd.DataFrame, per_cell: pd.DataFrame, out_path: Path) -> None:
         for des, col in SETPOINT_COLORS.items()
     ]
     ax.legend(
-        handles=est_handles + snd_handles, fontsize=7, loc="center right", ncol=1
+        handles=est_handles + snd_handles, fontsize=7, loc="upper right", ncol=1
     )
 
     # (b) Reward trajectories.
