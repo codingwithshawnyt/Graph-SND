@@ -123,6 +123,7 @@ RESULT_PATTERNS = [
 
 DICO_PATTERNS = [
     "ControllingBehavioralDiversity-fork/GRAPH_SND_CHANGES.md",
+    "ControllingBehavioralDiversity-fork/CITATION.cff",
     "ControllingBehavioralDiversity-fork/LICENSE",
     "ControllingBehavioralDiversity-fork/het_control/graph_snd.py",
     "ControllingBehavioralDiversity-fork/het_control/callback.py",

@@ -6,17 +6,12 @@
     \item[] Question: Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
     \item[] Answer: \answerYes{}
     \item[] Justification: The abstract and Section~\ref{sec:intro}
-    state exactly the four claims validated by the experiments
-    (recovery, unbiasedness, concentration, and wall-clock speedup),
-    with the downstream DiCo integration flagged separately, and each
-    claim is numbered and cross-referenced. The scope restrictions
-    (IPPO only, VMAS Multi-Agent Goal Navigation and Dispersion plus one
-    MPE simple-spread transfer panel at $n{=}10$ with categorical
-    policies/TVD; the main DiCo experiment is at a single set
-    point $\SND_{\mathrm{des}}{=}0.1$, with a three-seed,
-    three-set-point head-to-head at $n{=}50$ comparing Bernoulli-$0.1$
-    Graph-SND against full SND as the DiCo estimator in
-    Appendix~\ref{app:dico-n50-sweep}) are stated in
+    state the method, theory, scaling, expander, and DiCo claims made
+    by the paper. The scope restrictions (IPPO only, VMAS Multi-Agent
+    Goal Navigation and Dispersion plus one MPE simple-spread transfer
+    panel at $n{=}10$ with categorical policies/TVD; online training at
+    $n{=}100$ for PPO and $n{=}50$ for DiCo; $n{=}500$ used for
+    frozen-policy timing and expander measurement) are stated in
     Section~\ref{sec:discussion} (Limitations) and do not contradict
     any claim in the abstract or introduction.
 
@@ -24,7 +19,7 @@
     \item[] Question: Does the paper discuss the limitations of the work performed by the authors?
     \item[] Answer: \answerYes{}
     \item[] Justification: Section~\ref{sec:discussion} contains a
-    dedicated ``Limitations'' paragraph itemising five scope limits
+    dedicated ``Limitations'' paragraph itemizing five scope limits
     (scale/timing regime coverage, scenario and DiCo-configuration
     coverage, fixed-$G$ ablation, narrow non-Gaussian coverage,
     IPPO-only scope).
@@ -93,23 +88,21 @@
 \item {\bf Open access to data and code}
     \item[] Question: Does the paper provide open access to the data and code, with sufficient instructions to faithfully reproduce the main experimental results, as described in supplemental material?
     \item[] Answer: \answerYes{}
-    \item[] Justification: All code is released at the repository
-    cited in the Conclusion, with a top-level \texttt{README.md}
-    that specifies installation, training, experiment reproduction
-    commands, and seed-42 expected values for each of the four
-    validated claims. Raw CSVs, summary JSONs, and figure PDFs for
-    every experiment in the paper are checked into the repository
-    under \texttt{results/}. A preflight script
+    \item[] Justification: The anonymous supplement contains the code,
+    tests, curated result CSV/JSON/PDF artifacts, selected raw DiCo CSV
+    logs, and a top-level \texttt{README.md} specifying installation,
+    experiment reproduction commands, and a claim-to-code map. A
+    preflight script
     (\texttt{scripts/preflight.sh}) runs the test suite and a
     smoke-training pass on each visible CUDA device to catch
     environment problems before overnight runs. For the anonymous
-    submission the repository URL is anonymised in the main text;
-    the supplementary material contains an anonymised snapshot.
+    submission the repository URL is anonymized in the main text; the
+    public repository will be released upon acceptance.
 
 \item {\bf Experimental setting/details}
     \item[] Question: Does the paper specify all the training and test details (e.g., data splits, hyperparameters, how they were chosen, type of optimizer) necessary to understand the results?
     \item[] Answer: \answerYes{}
-    \item[] Justification: Training details (optimiser, learning
+    \item[] Justification: Training details (optimizer, learning
     rate, clip parameter, GAE $\lambda$, discount $\gamma$, rollout
     shape, mini-batch size, PPO epochs, hidden-layer width, activation)
     are listed in Appendix~\ref{app:hyperparams}. The DiCo integration
@@ -191,7 +184,7 @@
     \item[] Question: Does the research conducted in the paper conform, in every respect, with the NeurIPS Code of Ethics \url{https://neurips.cc/public/EthicsGuidelines}?
     \item[] Answer: \answerYes{}
     \item[] Justification: The work is theoretical and empirical
-    research on a metric for behavioural diversity in cooperative
+    research on a metric for behavioral diversity in cooperative
     MARL. It does not involve human subjects, sensitive data, or
     release of models with plausible misuse potential. No deviations
     from the NeurIPS Code of Ethics are required.
@@ -201,7 +194,7 @@
     \item[] Answer: \answerNA{}
     \item[] Justification: Graph-SND is a methodological metric
     contribution that reduces the wall-clock cost of measuring
-    behavioural diversity in cooperative MARL. It enables neither
+    behavioral diversity in cooperative MARL. It enables neither
     new capabilities nor new deployments; it only makes an existing
     measurement cheaper. We therefore do not identify a direct path
     to positive or negative societal impact.
@@ -210,7 +203,7 @@
     \item[] Question: Does the paper describe safeguards that have been put in place for responsible release of data or models that have a high risk for misuse (e.g., pre-trained language models, image generators, or scraped datasets)?
     \item[] Answer: \answerNA{}
     \item[] Justification: No data or models with misuse potential
-    are released; the released artefacts are experimental code,
+    are released; the released artifacts are experimental code,
     reproducible CSV/JSON result files, and paper figures.
 
 \item {\bf Licenses for existing assets}

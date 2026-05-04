@@ -98,9 +98,10 @@ unbiased Horvitz--Thompson estimator or a normalized sample mean with
 finite-population $O(1/\sqrt{m})$ concentration conditional on the
 sampled edge count. For fixed sparse graphs, we prove forwarding-index
 worst-case distortion bounds for expanders and a sharper spectral
-discrepancy bound under nuclear-norm control of the distance matrix. Experiments on
-VMAS and PettingZoo verify recovery, unbiasedness, concentration, and
-wall-clock scaling. In a 500-iteration $n=100$ PPO run,
+discrepancy bound under nuclear-norm control of the distance matrix. VMAS
+experiments verify recovery, unbiasedness, concentration, and wall-clock
+scaling, while a PettingZoo TVD panel checks non-Gaussian transfer. In a
+500-iteration $n=100$ PPO run,
 Bernoulli-$0.1$ Graph-SND tracks full SND while reducing metric time by
 about $10\times$, and GPU timing up to $n=500$ follows the predicted
 $\binom{n}{2}/|E|$ speedup. Random $d$-regular expanders empirically
@@ -141,9 +142,10 @@ precomputed graph. (ii) We prove recovery, non-negativity,
 graph-automorphism invariance, Horvitz--Thompson unbiasedness,
 conditional concentration, forwarding-index distortion bounds
 \citep{heydemann1989forwarding,leighton1999multicommodity}, and a
-spectral nuclear-norm refinement. (iii) Experiments on VMAS
-\citep{bettini2022vmas} and PettingZoo verify recovery, concentration,
-and wall-clock scaling through $n=500$; a 500-iteration $n=100$ PPO run
+spectral nuclear-norm refinement. (iii) VMAS experiments
+\citep{bettini2022vmas} verify recovery, concentration, and wall-clock
+scaling through $n=500$, while PettingZoo provides a discrete-action
+TVD transfer check; a 500-iteration $n=100$ PPO run
 shows Bernoulli-$0.1$ Graph-SND tracking full SND at about $10\times$
 lower metric cost. (iv) Random $d$-regular expanders achieve
 $\SNDG^{\mathrm{u}}/\SND\in[0.9987,1.0013]$ at
