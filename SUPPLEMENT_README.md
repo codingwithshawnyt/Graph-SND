@@ -34,13 +34,14 @@ claims can still be inspected without rerunning long GPU jobs.
 python -m pytest tests -q
 python experiments/exp1_plots.py --results results/exp1
 python experiments/exp3_plots.py \
-  --csv results/exp3/expander_distortion.csv \
-  --output-main results/exp3/expander_distortion_main.pdf \
-  --output-appendix results/exp3/expander_distortion_appendix.pdf
+  --csv results/exp3/expander_distortion.csv
 ```
 
 Expected result: all unit tests pass, and the plotting commands recreate
-the committed result figures from CSV/JSON data.
+the committed result figures from CSV/JSON data. The expander plotting
+script writes `expander_distortion_main.pdf`,
+`expander_distortion_appendix.pdf`, and, when checkpoint rows are
+present, `expander_distortion_n100_checkpoint.pdf` beside the input CSV.
 
 ## Paper Claim Verification
 
@@ -51,7 +52,7 @@ the committed result figures from CSV/JSON data.
 | Uniform edge samples concentrate as a function of sampled edge count | `graphsnd.metrics.hoeffding_bound`; inspect `results/exp1/concentration.csv` |
 | Sparse runtime follows $\binom{n}{2}/|E|$ | inspect `results/exp2/timing_n100_250_500.csv` |
 | Expander sparse aggregation is accurate and has spectral diagnostics | run `experiments/exp3_plots.py`; inspect `results/exp3/expander_distortion.csv` |
-| DiCo can use Graph-SND as a control signal | inspect `ControllingBehavioralDiversity-fork/GRAPH_SND_CHANGES.md`, `results/dico_n50_bern_vs_full/`, and `results/dico_n50_posthoc_full_snd/` |
+| DiCo can use Graph-SND as a control signal | inspect `ControllingBehavioralDiversity-fork/GRAPH_SND_CHANGES.md`, included `ControllingBehavioralDiversity-fork/results/neurips_final_n50_setpoint_sweep/**/graph_snd_log.csv`, `results/dico_n50_bern_vs_full/`, and `results/dico_n50_posthoc_full_snd/` |
 
 ## Hardware Notes
 

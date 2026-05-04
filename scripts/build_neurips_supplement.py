@@ -56,7 +56,7 @@ FORBIDDEN_PATTERNS = [
     for pattern in [
         r"\b" + "Sha" + "wn" + r"\b",
         r"\b" + "sha" + "wnr" + r"\b",
-        "coding" + "with" + "shawnyt",
+        "coding" + "with" + "sh" + "aw" + "nyt",
         r"github\.com/" + "coding" + "with",
         "/" + "Users" + "/",
         "/" + "usr1" + "/",
@@ -147,6 +147,7 @@ DICO_PATTERNS = [
     "ControllingBehavioralDiversity-fork/scripts/plot_graph_dico.py",
     "ControllingBehavioralDiversity-fork/tests/*.py",
     "ControllingBehavioralDiversity-fork/results/neurips_final_n50/seed0/*/graph_snd_log.csv",
+    "ControllingBehavioralDiversity-fork/results/neurips_final_n50_setpoint_sweep/seed*/snd*/*/graph_snd_log.csv",
 ]
 
 EXCLUDE_PATTERNS = [
@@ -252,9 +253,11 @@ def scan_text(entries: Iterable[Entry]) -> list[str]:
 
 def write_zip(entries: Iterable[Entry], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out_path.with_suffix(".tmp.zip")
-    if tmp.exists():
-        tmp.unlink()
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f"{out_path.stem}.", suffix=".tmp.zip", dir=out_path.parent
+    )
+    os.close(fd)
+    tmp = Path(tmp_name)
     with zipfile.ZipFile(tmp, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         for entry in entries:
             zf.write(entry.src, entry.arcname.as_posix())
@@ -294,6 +297,8 @@ def main() -> int:
     if args.list:
         for entry in entries:
             print(entry.arcname.as_posix())
+        if not args.check:
+            return 0
 
     failures = scan_text(entries)
     if failures:

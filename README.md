@@ -63,15 +63,17 @@ python experiments/plot_timing_n500.py \
 
 # Expander sparsification figures from committed CSVs.
 python experiments/exp3_plots.py \
-  --csv results/exp3/expander_distortion.csv \
-  --out results/exp3/expander_distortion.pdf
+  --csv results/exp3/expander_distortion.csv
 
-# DiCo n=50 Bernoulli-vs-full summary table and figure.
+# DiCo n=50 Bernoulli-vs-full summary table and figure from included
+# per-iteration CSV logs.
 python experiments/n50_bern_vs_full_comparison.py \
   --root ControllingBehavioralDiversity-fork/results/neurips_final_n50_setpoint_sweep \
   --out-dir results/dico_n50_bern_vs_full
 
-# DiCo n=50 post-hoc complete-graph SND audit, after the raw logs exist.
+# DiCo n=50 post-hoc complete-graph SND audit. The supplement includes
+# the resulting per-cell/summary CSVs and figure; rerunning this command
+# requires the raw GPU logs from that audit run.
 python experiments/n50_posthoc_full_snd_validation.py \
   --root ControllingBehavioralDiversity-fork/results/neurips_final_n50_posthoc_full_snd \
   --out-dir results/dico_n50_posthoc_full_snd

@@ -22,6 +22,9 @@ support the paper.
 - selected `results/`: committed CSV/JSON/PDF artifacts used by the
   paper, including the $n=50$ DiCo head-to-head and post-hoc
   complete-graph SND audit summaries.
+- selected DiCo raw CSV logs for the $n=50$ Bernoulli-vs-full
+  set-point sweep, so the compact head-to-head table can be regenerated
+  from per-iteration records.
 - `checkpoints/*_meta.json`: checkpoint metadata without binary model
   weights.
 - selected `ControllingBehavioralDiversity-fork/` files: Graph-SND
