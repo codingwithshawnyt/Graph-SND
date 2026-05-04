@@ -561,12 +561,14 @@ cost by $9.24$--$9.63\times$, matching the $10\times$ pair-count
 prediction. This is the main closed-loop substitution test: full SND is
 not merely evaluated post hoc, but trained as the competing DiCo signal
 on the same seed and set-point grid. A separate post-hoc full-SND audit
-of the trained actions (Appendix~\ref{app:dico-n50-sweep},
+of the trained actions (Table~\ref{tab:dico-n50-posthoc-main} and
+Appendix~\ref{app:dico-n50-sweep},
 Figure~\ref{fig:dico-n50-posthoc-full-snd}) confirms that the
 Bernoulli-controlled policies' complete-graph SND also stays within
-$0.61\%$ of the target. The only systematic difference is the
-aggregation used by the controller, and the observed differences are
-smaller than seed-to-seed variation.
+$0.61\%$ of the target; this audit signal is never fed back into the
+controller. The only systematic difference is the aggregation used by
+the controller, and the observed differences are smaller than
+seed-to-seed variation.
 
 \begin{figure}[t]
 \centering
@@ -599,6 +601,31 @@ across all nine matched cells, the paired mean reward difference
 (Bernoulli minus full) is $-6.2{\times}10^{-4}\pm9.2{\times}10^{-3}$
 SEM.}
 \label{tab:dico-n50-main}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+$\SND_{\mathrm{des}}$ & Post-hoc full-SND err.\ (Bern/full) &
+Post-hoc minus applied (Bern/full) \\
+\midrule
+$0.12$ & $0.50\%$ / $0.48\%$ &
+$2.9{\times}10^{-4}$ / $3.0{\times}10^{-4}$ \\
+$0.14$ & $0.61\%$ / $0.36\%$ &
+$4.7{\times}10^{-4}$ / $2.6{\times}10^{-4}$ \\
+$0.15$ & $0.43\%$ / $0.46\%$ &
+$3.1{\times}10^{-4}$ / $4.7{\times}10^{-4}$ \\
+\bottomrule
+\end{tabular}
+\caption{Post-hoc complete-graph SND audit for the $n{=}50$ DiCo
+head-to-head. Each cell is remeasured with full SND on the scaled
+actions at every iteration, but the audit value is not used by the
+controller. Bernoulli-$0.1$ remains within $0.61\%$ of the desired
+complete-graph diversity at all set points, and the audit differs from
+the online applied signal by less than $5{\times}10^{-4}$.}
+\label{tab:dico-n50-posthoc-main}
 \end{table}
 
 \subsection{Expander sparsification ablation}
@@ -659,7 +686,9 @@ Gaussian Wasserstein SND whenever the pairwise dissimilarity satisfies
 the relevant boundedness or metric assumptions (Appendix~\ref{app:verify},
 Table~\ref{tab:mpe-tvd-panel}).
 
-\begin{table}[t]
+\begin{center}
+\refstepcounter{table}
+\label{tab:graph-selection-rule}
 \centering
 \small
 \begin{tabular}{p{0.20\linewidth}p{0.25\linewidth}p{0.42\linewidth}}
@@ -677,11 +706,43 @@ $d=\Theta(\log n)$ & Forwarding-index worst-case structure plus
 near-unit empirical ratios at $\Theta(n\log n)$ edges in our ablation. \\
 \bottomrule
 \end{tabular}
-\caption{Practical graph-selection rule. The graph is not a nuisance
-parameter: it decides whether Graph-SND is estimating full SND or
-defining a different, localized diversity functional.}
-\label{tab:graph-selection-rule}
-\end{table}
+\par\smallskip
+\begin{minipage}{0.96\linewidth}
+\small \textbf{Table~\thetable:} Practical graph-selection rule. The graph is
+not a nuisance parameter: it decides whether Graph-SND is estimating full
+SND or defining a different, localized diversity functional.
+\end{minipage}
+\end{center}
+
+\paragraph{Why aggregation is the right intervention.}
+Graph-SND is most useful when SND is not a one-off diagnostic but a
+quantity repeatedly evaluated inside training, selection, or diversity
+control. In that setting full SND imposes a quadratic tax at every metric
+call, while sparse aggregation exposes an explicit accuracy--cost knob:
+$p$ or $m$ for random estimators, $k$ for local neighborhoods, and $d$
+for expander proxies. Because the intervention is only the aggregation
+layer, the downstream optimizer and pairwise distance remain unchanged.
+The evidence is therefore deliberately staged: exact recovery and
+unbiasedness establish equivalence on the complete target, scaling
+experiments show the expected cost law, and DiCo verifies that the same
+replacement remains stable when the metric is used as feedback rather
+than only measured offline.
+
+\paragraph{Failure modes and interpretation.}
+The main failure mode is transparent from the graph semantics. A sparse
+fixed graph can hide diversity on non-edges: for example, if agents form
+two behaviorally distinct clusters but $G$ contains mostly within-cluster
+edges, $\SNDG$ may be small while complete-graph $\SND$ is large. This is
+not a failure of the estimator theory; it means the graph has selected a
+local measurement target. Conversely, Bernoulli and fixed-size random
+graphs treat omitted edges as missing samples from the complete pair set,
+so their guarantees speak directly about full SND. This separation is why
+we evaluate fixed expanders as deterministic proxies, evaluate random
+graphs by unbiasedness and concentration, and audit the DiCo controller
+post hoc with full complete-graph SND. The same implementation can
+therefore support two scientifically different uses: measuring diversity
+only where interaction structure says it matters, or approximating the
+global SND metric when all-pairs aggregation is the bottleneck.
 
 \paragraph{Limitations and future work.}
 The empirical scope remains intentionally focused. Online training is
@@ -707,11 +768,17 @@ and experiments showing the expected cost reduction while preserving the
 behavior of SND in training and DiCo control. The practical knob is the
 graph $G$: it decides whether the diversity signal is local by design or
 a cheaper approximation of the global complete-graph metric.
+The implication is that all-pairs aggregation should be a deliberate
+choice, not the default paid at every scale: when global SND is required,
+random sampling gives estimator guarantees; when task structure matters,
+fixed graphs give a sharper local signal; and when deterministic sparse
+proxies are desired, expanders provide a strong near-linear candidate.
 \codelocation
 
 % ============================================================
 % References are unlimited and do NOT count toward the 9-page main
 % content budget. They appear here right after the conclusion.
+\clearpage
 \bibliographystyle{plainnat}
 \bibliography{references}
 
