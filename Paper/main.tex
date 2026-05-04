@@ -406,6 +406,7 @@ $m = |E(G_p)|$, and define the uniform-weight variant
 \]
 Then for any $\delta \in (0,1)$, conditional on $|E(G_p)| = m \geq 1$,
 with probability at least $1 - \delta$ over the randomness of $G_p$,
+Hoeffding's sampling-without-replacement finite-population extension gives
 \begin{equation}
 \label{eq:concentration}
 \abs{\SNDG^{\mathrm{u}}(\mathbf{D}, G_p) - \SND(\mathbf{D})}
@@ -499,16 +500,17 @@ We evaluate Graph-SND as an aggregation layer, so the experiments target
 metric recovery, estimator scaling, deterministic sparse approximation,
 and downstream DiCo control rather than new task-level RL performance.
 Hyperparameters and rollout details are in Appendix~\ref{app:hyperparams}.
-Core checks on VMAS Goal Navigation verify exact recovery on $K_4$,
+Core checks on VMAS Multi-Agent Goal Navigation verify exact recovery on $K_4$,
 Horvitz--Thompson unbiasedness at $n=8$, and zero concentration-bound
-violations across $24{,}000$ finite-population draws at $n=16$
+violations across $12$ cells with $2{,}000$ finite-population draws each
+at $n=16$
 (Appendix~\ref{app:verify}).
 
 \subsection{Scaling to $n=100$ under training dynamics}
 \label{sec:experiments:scaling}
 
 We train $100$ independently parameterized Gaussian policies on VMAS
-Goal Navigation for $500$ PPO iterations. Every $25$ iterations we log
+Multi-Agent Goal Navigation for $500$ PPO iterations. Every $25$ iterations we log
 full $\SND$ over all $\binom{100}{2}=4{,}950$ pairs and
 $\SNDG^{\mathrm{u}}(G_{0.1})$ on one Bernoulli-$0.1$ edge sample, with
 CUDA-synchronized timing. Figure~\ref{fig:scaling-n100} shows the two

@@ -148,7 +148,7 @@ def plot_unbiasedness(df: pd.DataFrame, out_path: Path) -> None:
         ax.set_xlim(0.02, 0.85)
         ax.set_xlabel("inclusion probability $p$")
         ax.set_ylabel(r"$\hat{\mathrm{SND}}_{\mathrm{HT}}$")
-        ax.set_title(f"Prop. 8: HT unbiasedness (n=8, {tag})")
+        ax.set_title(f"Prop. 7: HT unbiasedness (n=8, {tag})")
         ax.legend(loc="best")
 
     _save(fig, out_path)
@@ -182,7 +182,7 @@ def plot_concentration(df: pd.DataFrame, out_path: Path) -> None:
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_title(
-            f"Thm. 10 (n=16, {tag}; SND = {snd_true:.4f}, $\\delta$={delta:.2f})"
+            f"Thm. 9 (n=16, {tag}; SND = {snd_true:.4f}, $\\delta$={delta:.2f})"
         )
         ax.legend(loc="upper right", fontsize=9)
 

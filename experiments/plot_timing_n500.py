@@ -68,7 +68,7 @@ def _scaling_at_p01_from_n100(df: pd.DataFrame) -> Optional[pd.DataFrame]:
         .median()
         .sort_values("n")
     )
-    sub["regime"] = "GPU, online training (Sec. 6.4)"
+    sub["regime"] = "GPU, online training (Sec. 6.1)"
     return sub
 
 
@@ -147,7 +147,7 @@ def plot(
         )
     regime_styles = {
         "CPU, frozen-ckpt (App. C)": {"marker": "o", "color": "#d62728"},
-        "GPU, online training (Sec. 6.4)": {"marker": "s", "color": "#ff7f0e"},
+        "GPU, online training (Sec. 6.1)": {"marker": "s", "color": "#ff7f0e"},
         "GPU, frozen-init (this work)": {"marker": "D", "color": "#1f77b4"},
     }
     for piece in pieces:
