@@ -58,18 +58,23 @@ python experiments/exp1_plots.py --results results/exp1
 
 # GPU timing figure from committed timing CSV.
 python experiments/plot_timing_n500.py \
-  --csv results/exp2/timing_n100_250_500.csv \
-  --output results/exp2/timing_n100_250_500.pdf
+  --exp2-csv results/exp2/timing_n100_250_500.csv \
+  --out results/exp2/timing_n500.pdf
 
 # Expander sparsification figures from committed CSVs.
 python experiments/exp3_plots.py \
   --csv results/exp3/expander_distortion.csv \
-  --output-main results/exp3/expander_distortion_main.pdf \
-  --output-appendix results/exp3/expander_distortion_appendix.pdf
+  --out results/exp3/expander_distortion.pdf
 
 # DiCo n=50 Bernoulli-vs-full summary table and figure.
 python experiments/n50_bern_vs_full_comparison.py \
-  --results-base results/dico_n50_bern_vs_full
+  --root ControllingBehavioralDiversity-fork/results/neurips_final_n50_setpoint_sweep \
+  --out-dir results/dico_n50_bern_vs_full
+
+# DiCo n=50 post-hoc complete-graph SND audit, after the raw logs exist.
+python experiments/n50_posthoc_full_snd_validation.py \
+  --root ControllingBehavioralDiversity-fork/results/neurips_final_n50_posthoc_full_snd \
+  --out-dir results/dico_n50_posthoc_full_snd
 ```
 
 Several experiments require a CUDA GPU to rerun from scratch. The
@@ -85,7 +90,7 @@ inspectable on CPU-only machines.
 | Uniform samples concentrate with $O(1/\sqrt{m})$ radius | `graphsnd/metrics.py::hoeffding_bound`, `tests/test_metrics.py`, `results/exp1/concentration.csv` |
 | Runtime scales with $|E|$ rather than $\binom{n}{2}$ | `graphsnd/metrics.py::graph_snd_from_rollouts`, `experiments/exp2_timing_scaling.py`, `results/exp2/timing_n100_250_500.csv` |
 | Random regular graphs give accurate sparse aggregators | `graphsnd/graphs.py::random_regular_edges`, `experiments/exp3_expander_distortion.py`, `results/exp3/expander_distortion.csv` |
-| Graph-SND can replace full SND in DiCo | `ControllingBehavioralDiversity-fork/GRAPH_SND_CHANGES.md`, selected DiCo integration files, `results/dico_n50_bern_vs_full/` |
+| Graph-SND can replace full SND in DiCo | `ControllingBehavioralDiversity-fork/GRAPH_SND_CHANGES.md`, selected DiCo integration files, `results/dico_n50_bern_vs_full/`, `results/dico_n50_posthoc_full_snd/` |
 
 ## DiCo Integration
 
@@ -112,4 +117,3 @@ The builder writes `dist/graph_snd_neurips_supplement.zip` and fails if:
   included text files.
 
 See `SUPPLEMENT_MANIFEST.md` for the exact inclusion/exclusion policy.
-

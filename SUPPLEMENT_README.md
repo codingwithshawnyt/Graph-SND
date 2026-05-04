@@ -51,7 +51,7 @@ the committed result figures from CSV/JSON data.
 | Uniform edge samples concentrate as a function of sampled edge count | `graphsnd.metrics.hoeffding_bound`; inspect `results/exp1/concentration.csv` |
 | Sparse runtime follows $\binom{n}{2}/|E|$ | inspect `results/exp2/timing_n100_250_500.csv` |
 | Expander sparse aggregation is accurate and has spectral diagnostics | run `experiments/exp3_plots.py`; inspect `results/exp3/expander_distortion.csv` |
-| DiCo can use Graph-SND as a control signal | inspect `ControllingBehavioralDiversity-fork/GRAPH_SND_CHANGES.md` and `results/dico_n50_bern_vs_full/` |
+| DiCo can use Graph-SND as a control signal | inspect `ControllingBehavioralDiversity-fork/GRAPH_SND_CHANGES.md`, `results/dico_n50_bern_vs_full/`, and `results/dico_n50_posthoc_full_snd/` |
 
 ## Hardware Notes
 
@@ -59,4 +59,3 @@ the committed result figures from CSV/JSON data.
 - VMAS training and timing sweeps are faster on CUDA GPUs.
 - The DiCo $n=50$ validation runs are GPU experiments; the supplement
   includes logs/summaries sufficient for review without rerunning them.
-

@@ -104,6 +104,8 @@ RESULT_PATTERNS = [
     "results/dico_n50_bern_vs_full/*.csv",
     "results/dico_n50_bern_vs_full/*.pdf",
     "results/dico_n50_bern_vs_full/*.tex",
+    "results/dico_n50_posthoc_full_snd/*.csv",
+    "results/dico_n50_posthoc_full_snd/*.pdf",
     "results/dico_n50_sweep/*.csv",
     "results/dico_n50_sweep/*.pdf",
     "results/discrete_tvd_sanity/*.csv",

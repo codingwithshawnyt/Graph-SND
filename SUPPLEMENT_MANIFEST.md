@@ -20,7 +20,8 @@ support the paper.
   plots.
 - selected `scripts/`: reproducibility launchers and supplement builder.
 - selected `results/`: committed CSV/JSON/PDF artifacts used by the
-  paper.
+  paper, including the $n=50$ DiCo head-to-head and post-hoc
+  complete-graph SND audit summaries.
 - `checkpoints/*_meta.json`: checkpoint metadata without binary model
   weights.
 - selected `ControllingBehavioralDiversity-fork/` files: Graph-SND
@@ -41,4 +42,3 @@ support the paper.
 The builder scans included text files for author identifiers, private
 paths, private hostnames, and non-anonymous repository URLs. The build
 fails if any such string appears in the archive.
-

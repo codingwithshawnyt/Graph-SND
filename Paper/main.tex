@@ -560,8 +560,12 @@ yields paired reward differences centered near zero, and reduces metric
 cost by $9.24$--$9.63\times$, matching the $10\times$ pair-count
 prediction. This is the main closed-loop substitution test: full SND is
 not merely evaluated post hoc, but trained as the competing DiCo signal
-on the same seed and set-point grid. The only systematic difference is
-the aggregation used by the controller, and the observed differences are
+on the same seed and set-point grid. A separate post-hoc full-SND audit
+of the trained actions (Appendix~\ref{app:dico-n50-sweep},
+Figure~\ref{fig:dico-n50-posthoc-full-snd}) confirms that the
+Bernoulli-controlled policies' complete-graph SND also stays within
+$0.61\%$ of the target. The only systematic difference is the
+aggregation used by the controller, and the observed differences are
 smaller than seed-to-seed variation.
 
 \begin{figure}[t]
@@ -1406,6 +1410,30 @@ $\binom{50}{2}{=}1{,}225$; full SND evaluates all $1{,}225$ pairs.}
 \small
 \resizebox{\linewidth}{!}{\input{n50_bern_vs_full_headtohead}}
 \end{table}
+
+To rule out the possibility that the sparse controller merely tracks
+its own sparse feedback signal, we repeat the same $18$-cell grid with
+an audit callback that computes full complete-graph SND on the scaled
+actions at every iteration. This post-hoc signal is never fed back into
+the controller. For the Bernoulli-$0.1$ arm, post-hoc full-SND relative
+tracking error is $0.43$--$0.61\%$ across the three set points; for the
+full-SND arm it is $0.36$--$0.48\%$. The mean post-hoc complete-graph
+SND exceeds the online applied signal by only
+$2.9{\times}10^{-4}$--$4.7{\times}10^{-4}$, confirming that the
+sparse-controlled policies also match the intended full-SND diversity
+level.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=\linewidth]{figures/dico_n50_posthoc_full_snd_validation.pdf}
+\caption{Post-hoc complete-graph SND audit for the $n{=}50$ DiCo
+head-to-head. The audit computes full SND on the scaled actions every
+iteration while leaving the online controller unchanged. Bernoulli-$0.1$
+tracks the desired diversity under this complete-graph measurement to
+within $0.61\%$ relative error, so the sparse controller is not merely
+matching its own sparse feedback signal.}
+\label{fig:dico-n50-posthoc-full-snd}
+\end{figure}
 
 
 \section{Expander ablation: supplementary panels}
